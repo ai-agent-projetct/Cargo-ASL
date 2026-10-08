@@ -1,0 +1,10 @@
+# Upload only runtime code and public assets. Never upload local credentials/data.
+*
+!package.json
+!package-lock.json
+!server.mjs
+!quote.mjs
+!hosting.mjs
+!vercel.json
+!public
+!public/**

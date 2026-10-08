@@ -1,0 +1,21 @@
+{
+  "name": "cargo-asl",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "start": "node scripts/start.mjs",
+    "test": "node --test",
+    "db:check": "node scripts/check-mysql.mjs",
+    "db:init": "node scripts/init-db.mjs",
+    "test:integration": "node scripts/verify-integration.mjs",
+    "demo:seed": "node scripts/seed-portals.mjs",
+    "test:portals": "node scripts/verify-portals.mjs"
+  },
+  "dependencies": {
+    "mysql2": "^3.24.4"
+  }
+}

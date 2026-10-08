@@ -1,0 +1,12 @@
+node_modules/
+.env
+*.log
+coverage/
+.npm-cache/
+.local/
+.vercel/
+# Local reference captures are not part of the application release.
+docs/reference/
+docs/implementation-status.md
+docs/testing-report.md
+design-qa.md
