@@ -52,3 +52,6 @@ jobs:
           exit 1
       - run: npm run test:integration
       - run: npm run test:portals
+      - run: npm run test:workflow
+      - run: npm run demo:workspace
+      - run: npm run demo:workspace

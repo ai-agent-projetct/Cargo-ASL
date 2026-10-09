@@ -1,35 +1,50 @@
 # Cargo ASL
 
-Vanilla JavaScript frontend, Node.js server and MySQL schema. **Work in progress: this is not yet a complete ERP.**
+Cargo ASL is a logistics workspace with a vanilla JavaScript frontend, Node.js backend and MySQL storage. Admin, vendor and client accounts use separate sign-in pages and server-enforced record permissions. Its teal interface and demonstration organizations are original and fictional.
 
-The [test guide](docs/testing.md) records demo login checks, 27 passing unit tests, expanded MySQL integration checks, fixes and remaining limitations. Run `npm test`, `npm run test:integration`, and `npm run test:portals` with the local server running. GitHub Actions is configured to run these suites against disposable MySQL. Private reference captures and the full comparison report remain local.
+The implemented workflows are functional locally. Complete equivalence to the reference ERP and production readiness have **not** been verified. See the [test guide](docs/testing.md) for tested behavior and remaining acceptance work.
 
-## Run locally
+## Run
 
-Use Node 24 or newer. On this workstation the verified runtime is `E:\Tools\OmniRoute\node-v24.21.0-win-x64\node.exe`.
+Use Node 24 or newer and MySQL. On this workstation Node is available at `E:\Tools\OmniRoute\node-v24.21.0-win-x64\node.exe`.
 
-1. Install dependencies with `npm ci`.
-2. Copy `.env.example` to `.env` only if `.env` does not already exist. Configure the local MySQL account and database.
-3. Run `npm run db:check`. On this workstation a dedicated instance has been initialized on `127.0.0.1:3308`, database `cargo_asl`, account `LogiASL`. The existing MySQL service on port 3306 was not changed.
-4. For initial application login, set `ADMIN_EMAIL` and `ADMIN_PASSWORD` (at least 12 characters) in `.env`, then run `npm run db:init`. This creates the Cargo ASL database/tables and adds the first internal user without replacing existing users. Source ERP credentials are not imported.
-5. Run `npm start`, or double-click `Start Cargo ASL.cmd`; open `http://127.0.0.1:3000`. The launcher starts the dedicated database if necessary. Initial login details are saved in `.local/access.txt`, which is excluded from version control.
+1. Run `npm ci`.
+2. Copy `.env.example` to `.env` only if `.env` does not exist. Set the MySQL connection and initial `ADMIN_EMAIL` / `ADMIN_PASSWORD` (at least 12 characters).
+3. For a new database, run `npm run db:init`. For an existing Cargo ASL database, run `npm run db:migrate` to add the workspace tables without replacing existing data.
+4. Run `npm run demo:seed` to create fictional demo accounts. Their generated credentials are saved privately in `.local/portal-logins.txt`.
+5. Run `npm start`, then `npm run demo:workspace` in another terminal to add linked fictional business records. The seed preserves existing records and can be repeated.
+6. Open `http://127.0.0.1:3000/login/admin`, `/login/vendor`, or `/login/client`.
 
-The Windows administrator prompt for registering a boot-time service was canceled. No Cargo ASL Windows service was installed. Application startup does not require that service. MySQL data and its configuration are in `.local/mysql/`; do not delete this directory when updating application code. `scripts/stop-local-mysql.mjs` verifies the dedicated data-directory path before stopping it.
+On this workstation, `Start Cargo ASL.cmd` starts the app and dedicated MySQL instance on port 3308. The MySQL data is in `.local/mysql/data`; preserve it when updating. No Cargo ASL Windows service was installed. Existing MySQL services were not changed.
 
-`http://127.0.0.1:3000/?preview=1` opens the current interface without database access. It contains no copied source business records, and writes are disabled. It is not a working ERP substitute.
+## Workflows
 
-## Current implementation
+- CRM organizations, prospects, leads, opportunities, activities and sales targets.
+- Editable quotations with packages, charge lines, exchange rates, tax and exact decimal totals; nominated approval, publication, customer decisions, expiry and conversion.
+- Vendor rate requests and portal rate submissions, with approved rates imported into an editable quotation.
+- Shipments, service jobs and carrier bookings, including parties, packages, routing, milestones, customs, insurance and document details.
+- Pro forma conversion, invoice and supplier-bill posting, partial/full payments, credit notes and balanced ledger entries.
+- Master-data categories, tariffs, account creation, activation/deactivation and password resets that invalidate sessions.
+- Internal/shared notes and attachments, audit history, record followers and notifications.
+- Search, filters, saved filters, grouping, list/kanban/date views, charge CSV import, CSV exports and printable records.
+- Nineteen report views, including charge estimates vs actuals, profit, outstanding balances, customer volumes, courier shipments and recorded emissions. Currencies remain separate. Credits without a charge allocation appear separately.
+- Email outbox with reviewed messages and actual SMTP delivery when configured. Demo addresses are blocked. SMTP credentials are optional locally; an unconfigured outbox does not report messages as sent.
 
-- Separate `/login/admin`, `/login/vendor`, and `/login/client` pages, each enforcing its selected role on the server. Vendor and client accounts cannot use internal ERP endpoints.
-- Dedicated role overview pages with account-scoped fictional records and working search. Demo account credentials are in `.local/portal-logins.txt`. Run `npm run demo:seed` to create the accounts on a fresh database, and `npm run test:portals` to verify role restrictions and logout.
-- A distinct teal Cargo ASL design replaces the source sign-in/portal presentation. Demo names and organizations are fictional. Full vendor/client business actions remain unfinished; sample records are read-only.
+Existing earlier quotation drafts remain accessible at `/legacy`. They are a separate data model and are not automatically migrated into the new workspace. The earlier read-only visual preview is `/legacy?preview=1`.
 
-- Source fonts, sidebar structure, quotation dashboard layout, empty kanban/list views and base quotation form.
-- Node HTTP server, MySQL connection, hashed-password login, database sessions, internal-role API checks, request validation, same-origin request protection, and atomic draft creation/audit logging.
-- Base quotation required-field/date/amount validation with a runnable check: `npm test`. `npm run test:integration` checks the running server against MySQL, including login, draft persistence, validation, owner isolation, role checks, cross-origin rejection and logout; its temporary records are cleaned up.
+## Verify
 
-## Remaining work
+```sh
+npm test
+npm run test:integration
+npm run test:portals
+npm run test:workflow
+```
 
-Lookup administration; quotation editing, charges and transport-dependent behavior; approval/conversion rules; shipment workflows; accounting; administration; organizations; vendor/customer portals; reports; source-permission matching; imports/exports beyond basic CSV; complete visual and workflow comparison. Current dashboard aggregations and base forms are provisional until the source workflow is verified.
+The API suites require the app and a development MySQL database; temporary fixtures are removed afterward. GitHub Actions runs the suites against disposable MySQL and checks repeatable demo initialization.
 
-Never commit `.env` or `.local`. The service binds to loopback by default. Vercel deployment has been requested and configuration prepared, but no live deployment or cloud database has been verified. See [deployment notes](docs/vercel-deployment.md).
+## Deployment and acceptance
+
+Never commit `.env`, `.local`, credentials or MySQL data. Vercel configuration is prepared, but a cloud MySQL database and authenticated deployment are still required. See [deployment notes](docs/vercel-deployment.md).
+
+Real-browser acceptance of the new workspace remains pending because the browser connection disconnected. DOM tests do not replace that check. Source company/group permissions, mode-specific rules, document templates and external carrier/onboarding integrations are not verified as equivalent. Tracking and emissions currently use manually entered records; actual email delivery requires SMTP configuration. The workspace currently loads up to 5,000 accessible records and displays a warning if this limit is reached; larger deployments need server pagination and complete report aggregation. Public deployment also needs shared rate-limit enforcement, backups and operational acceptance.

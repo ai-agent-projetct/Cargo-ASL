@@ -5,6 +5,10 @@
 !server.mjs
 !quote.mjs
 !hosting.mjs
+!business.mjs
+!workspace-api.mjs
+!mailer.mjs
+!reports.mjs
 !vercel.json
 !public
 !public/**

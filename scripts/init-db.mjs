@@ -13,6 +13,7 @@ try {
   await conn.query(`USE \`${database}\``);
   const schema=await readFile(new URL('../db/schema.sql',import.meta.url),'utf8');
   for(const statement of schema.split(';').map(s=>s.trim()).filter(Boolean)) await conn.query(statement);
+  for(const statement of (await readFile(new URL('../db/workspace.sql',import.meta.url),'utf8')).split(';').map(s=>s.trim()).filter(Boolean))await conn.query(statement);
   const salt=randomBytes(16).toString('hex');
   const passwordHash=salt+':'+(await promisify(scrypt)(process.env.ADMIN_PASSWORD,salt,64)).toString('hex');
   await conn.execute("INSERT IGNORE INTO users(email,name,password_hash,role) VALUES(?,'Cargo ASL Administrator',?,'erp')",[process.env.ADMIN_EMAIL.trim().toLowerCase(),passwordHash]);

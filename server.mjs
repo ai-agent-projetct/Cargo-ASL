@@ -5,6 +5,7 @@ import { promisify } from 'node:util';
 import mysql from 'mysql2/promise';
 import { validateQuote, sections } from './quote.mjs';
 import { hostingSettings } from './hosting.mjs';
+import {workspaceApi} from './workspace-api.mjs';
 
 const hosting=hostingSettings();
 const pool = mysql.createPool({ host: process.env.MYSQL_HOST, port: Number(process.env.MYSQL_PORT || 3306), user: process.env.MYSQL_USER, password: process.env.MYSQL_PASSWORD, database: process.env.MYSQL_DATABASE, connectionLimit: 3, maxIdle:1, idleTimeout:10000, connectTimeout:10000, ssl:hosting.ssl, timezone: 'Z' });
@@ -14,10 +15,10 @@ const attempts = new Map();
 const portalStyle=['public/portals.css','text/css'];
 const publicFiles = new Map([['/quote-view.mjs',['public/quote-view.mjs','text/javascript']],['/', ['public/index.html','text/html']],['/app.js',['public/app.js','text/javascript']],['/style.css',['public/style.css','text/css']],['/quote.mjs',['quote.mjs','text/javascript']],['/assets/lato.woff',['public/assets/lato.woff','font/woff']],['/assets/lato-bold.woff',['public/assets/lato-bold.woff','font/woff']],['/assets/icons.woff2',['public/assets/icons.woff2','font/woff2']]]);
 function fail(status,message) { throw Object.assign(new Error(message),{status}); }
-async function body(req) {
+async function body(req,limit=100000) {
   if (!req.headers['content-type']?.startsWith('application/json')) fail(415,'Use application/json.');
   const chunks=[]; let size=0;
-  for await (const chunk of req) { size+=chunk.length; if(size>100000) fail(413,'Request too large.'); chunks.push(chunk); }
+  for await (const chunk of req) { size+=chunk.length; if(size>limit) fail(413,'Request too large.'); chunks.push(chunk); }
   try { return JSON.parse(Buffer.concat(chunks).toString()); } catch { fail(400,'Invalid JSON.'); }
 }
 function json(res,status,data,headers={}) { res.writeHead(status,{'Content-Type':'application/json','Cache-Control':'no-store',...headers}); res.end(JSON.stringify(data)); }
@@ -44,6 +45,13 @@ const server=http.createServer(async(req,res)=>{
     if(req.method==='GET' && publicFiles.has(url.pathname)) {
       const [file,type]=publicFiles.get(url.pathname); const data=await readFile(new URL(file,import.meta.url));
       res.writeHead(200,{'Content-Type':type}); return res.end(data);
+    }
+    if(req.method==='GET'&&['/workspace.js','/workspace.css','/csv-import.mjs','/business.mjs','/reports.mjs'].includes(url.pathname)){
+      const file=['/business.mjs','/reports.mjs'].includes(url.pathname)?url.pathname.slice(1):'public'+url.pathname;
+      res.writeHead(200,{'Content-Type':url.pathname.endsWith('.css')?'text/css':'text/javascript'});return res.end(await readFile(new URL(file,import.meta.url)));
+    }
+    if(req.method==='GET'&&url.pathname==='/legacy'){
+      res.writeHead(200,{'Content-Type':'text/html'});return res.end(await readFile(new URL('public/legacy.html',import.meta.url)));
     }
     if(req.method==='GET' && url.pathname==='/api/health') {
       try { await pool.query('SELECT 1'); return json(res,200,{database:'connected'}); }
@@ -76,6 +84,7 @@ const server=http.createServer(async(req,res)=>{
     }
     const user=await currentUser(req);
     if(!user) fail(401,'Sign in to Cargo ASL.');
+    if(url.pathname.startsWith('/api/workspace'))return await workspaceApi({req,res,url,user,pool,body,json,derive,randomBytes});
     if(req.method==='GET' && url.pathname==='/api/me') return json(res,200,user);
     if(req.method==='GET' && url.pathname==='/api/portal') {
       const [records]=await pool.execute('SELECT reference,organization,route,status FROM portal_demo_records WHERE user_id=? ORDER BY id DESC',[user.id]);
