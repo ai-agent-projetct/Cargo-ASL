@@ -1,6 +1,6 @@
 # Cargo ASL testing
 
-Verified locally on 8 October 2026 using Node 24.21.0 and MySQL.
+Verified locally on 8 October 2026 and rerun successfully on 9 October 2026 using Node 24.21.0 and MySQL.
 
 ## Run
 
@@ -20,7 +20,7 @@ The API suites require the app and MySQL. Integration tests create uniquely name
 - API integration suite passed: login, anonymous denial, persisted draft/audit, owner isolation, malformed/oversized bodies, content types, forged/expired sessions, inactive users, invalid/inactive master selections, portal record isolation, cross-origin rejection and logout.
 - All three demo roles passed API checks for login, wrong-portal rejection, cookies, account-scoped records, internal API restrictions and logout.
 - Browser checks passed for all three demo sign-ins; admin draft creation, list, customer search, dashboard refresh/drilldown; vendor record search. Client overview displayed its assigned fictional records.
-- GitHub Actions runs unit and API suites against disposable MySQL 8.4. Its remote execution remains to be verified.
+- GitHub Actions passed unit and API suites against disposable MySQL 8.4 on 9 October 2026: [successful run for application commit e284a06](https://github.com/ai-agent-projetct/Cargo-ASL/actions/runs/37873923226).
 
 ## Fixes
 
