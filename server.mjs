@@ -46,8 +46,8 @@ const server=http.createServer(async(req,res)=>{
       const [file,type]=publicFiles.get(url.pathname); const data=await readFile(new URL(file,import.meta.url));
       res.writeHead(200,{'Content-Type':type}); return res.end(data);
     }
-    if(req.method==='GET'&&['/workspace.js','/workspace.css','/csv-import.mjs','/business.mjs','/reports.mjs'].includes(url.pathname)){
-      const file=['/business.mjs','/reports.mjs'].includes(url.pathname)?url.pathname.slice(1):'public'+url.pathname;
+    if(req.method==='GET'&&['/workspace.js','/workspace.css','/csv-import.mjs','/business.mjs','/reports.mjs','/targets.mjs'].includes(url.pathname)){
+      const file=['/business.mjs','/reports.mjs','/targets.mjs'].includes(url.pathname)?url.pathname.slice(1):'public'+url.pathname;
       res.writeHead(200,{'Content-Type':url.pathname.endsWith('.css')?'text/css':'text/javascript'});return res.end(await readFile(new URL(file,import.meta.url)));
     }
     if(req.method==='GET'&&url.pathname==='/legacy'){
@@ -80,7 +80,7 @@ const server=http.createServer(async(req,res)=>{
       if(user.role!==role) fail(403,'This account does not have access to the selected portal.');
       attempts.delete(ip); const token=randomBytes(32).toString('hex');
       await pool.execute('INSERT INTO sessions(token_hash,user_id,expires_at) VALUES(?,?,DATE_ADD(UTC_TIMESTAMP(),INTERVAL 8 HOUR))',[hash(token),user.id]);
-      return json(res,200,{id:user.id,name:user.name,role:user.role},{'Set-Cookie':`cargo_session=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=28800${hosting.secureCookie?'; Secure':''}`});
+      return json(res,200,{id:user.id,name:user.name,email:user.email,role:user.role},{'Set-Cookie':`cargo_session=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=28800${hosting.secureCookie?'; Secure':''}`});
     }
     const user=await currentUser(req);
     if(!user) fail(401,'Sign in to Cargo ASL.');

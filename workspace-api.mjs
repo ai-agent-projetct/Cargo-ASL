@@ -1,20 +1,28 @@
-import {specs,workflows,validateFields,validateRecord,totals,documentTotals,scaled,money,canRead,actionsFor,editable} from './business.mjs';
+import {specs,rowSpecs,portalFields,workflows,validateFields,validateRecord,totals,documentTotals,scaled,money,canRead,canEdit,actionsFor,editable} from './business.mjs';
 import {deliver,smtpSettings} from './mailer.mjs';
+import {generateTargetMonths,targetProgress} from './targets.mjs';
 const fail=(status,message)=>{throw Object.assign(new Error(message),{status});};
 const today=()=>new Date().toISOString().slice(0,10);
 const assertInput=value=>{if(!value||typeof value!=='object'||Array.isArray(value))fail(400,'An object is required.');};
 const cleanError=fn=>{try{return fn();}catch(e){fail(400,e.message);}};
+function documentInput(input){
+ assertInput(input);
+ if(typeof input.name!=='string'||!input.name.trim()||input.name.length>200||/[\x00-\x1f/\\]/.test(input.name)||!['application/pdf','image/png','image/jpeg','text/plain','text/csv'].includes(input.mime)||typeof input.content!=='string'||!/^[A-Za-z0-9+/]*={0,2}$/.test(input.content))fail(400,'Upload a PDF, PNG, JPEG, text or CSV file with a valid name.');
+ const content=Buffer.from(input.content,'base64');if(!content.length||content.length>2000000)fail(400,'File size must be between 1 byte and 2 MB.');return {name:input.name.trim(),mime:input.mime,content};
+}
 function projected(record,user){
  const result=structuredClone(record);
  result.number=`${specs[result.kind].prefix}-${String(result.id).padStart(6,'0')}`;
  result.actions=actionsFor(record,user);
- result.editable=user.role==='erp'&&record.owner_id===user.id&&editable(record);
+ result.editable=canEdit(record,user);
  if(result.details.charges)result.totals=documentTotals(record.kind,result.details.charges);
  if(user.role==='customer'){
+  for(const key of ['_converted_id','_invoice_id','_credit_note_id'])delete result.details[key];
   for(const line of result.details.charges||[])delete line.cost_rate;
   if(result.totals){delete result.totals.cost;delete result.totals.profit;delete result.totals.margin;result.totals.lines.forEach(line=>delete line.cost);}
   for(const key of ['approver_user_id','sales_agent_id','sales_team','vendor_user_id','_published'])delete result.details[key];
  }
+ if(user.role==='vendor')delete result.details._bill_ids;
  return result;
 }
 async function recordById(db,id,user,lock=false){
@@ -33,11 +41,14 @@ async function references(db,kind,data,user){
   }
  }
  if(['invoice','proforma','vendor_bill'].includes(kind))for(const key of ['shipment_id','service_job_id'])if(data[key]){const source=await recordById(db,data[key],user);if(data.currency!==source.details.currency)fail(400,'Document currency must match the linked job.');if(data.client_user_id&&data.client_user_id!==source.details.client_user_id)fail(400,'Client must match the linked job.');}
+ if(kind==='invoice_request'){const shipment=await recordById(db,data.shipment_id,user);if(shipment.details.currency!==data.currency)fail(400,'Invoice request currency must match its shipment.');}
  if(kind==='credit_note'){const invoice=await recordById(db,data.invoice_id,user);if(invoice.details.currency!==data.currency||invoice.details.client_user_id!==data.client_user_id)fail(400,'Credit note currency and client must match the invoice.');if(!['Posted','Partially Paid'].includes(invoice.status))fail(400,'Credit notes require an outstanding posted invoice.');}
 }
 async function insert(db,kind,data,user){
  data=cleanError(()=>validateRecord(kind,data));await references(db,kind,data,user);
+ let inquiry;if(kind==='quote'&&data.source_request_id){inquiry=await recordById(db,data.source_request_id,user,true);if(inquiry.status!=='Submitted')fail(409,'This inquiry has already been handled.');if(inquiry.details.client_user_id!==data.client_user_id)fail(400,'Quotation client must match the inquiry.');}
  const [row]=await db.execute('INSERT INTO business_records(kind,owner_id,details) VALUES(?,?,?)',[kind,user.id,JSON.stringify(data)]);
+ if(inquiry){inquiry.status='Quoted';inquiry.details._converted_id=row.insertId;await save(db,inquiry,user,'quotation prepared');}
  await audit(db,user.id,row.insertId,'create');return row.insertId;
 }
 async function audit(db,userId,id,action){await db.execute("INSERT INTO audit_log(user_id,entity,entity_id,action) VALUES(?,'record',?,?)",[userId,id,action]);await db.execute('INSERT INTO workspace_notifications(record_id,user_id,message) SELECT record_id,user_id,? FROM record_followers WHERE record_id=? AND user_id<>?',[action,id,userId]);}
@@ -105,6 +116,7 @@ export async function workspaceApi({req,res,url,user,pool,body,json,derive,rando
   const [history]=user.role==='erp'?await pool.execute("SELECT a.action,a.created_at,u.name AS author FROM audit_log a JOIN users u ON u.id=a.user_id WHERE entity='record' AND entity_id=? ORDER BY a.id",[id]):[[]];
   const [payments]=await pool.execute('SELECT amount,reference,created_at FROM record_payments WHERE record_id=? ORDER BY id',[id]);
   const [followers]=await pool.execute('SELECT f.user_id,u.name FROM record_followers f JOIN users u ON u.id=f.user_id WHERE record_id=?',[id]);
+  if(record.kind==='invoice_request'){const [shipments]=await pool.execute('SELECT details FROM business_records WHERE id=? AND kind=?',[record.details.shipment_id,'shipment']);const d=shipments[0]?.details;if(d)record.shipment_summary=Object.fromEntries(['booking_reference','transport_mode','shipment_type','cargo_type','origin','destination','origin_port','destination_port'].map(key=>[key,d[key]||'']));}
   return json(res,200,{...projected(record,user),notes,documents,history,payments,following:followers.some(f=>f.user_id===user.id),followers:user.role==='erp'?followers:[]});
  }
  if(req.method==='POST'&&id&&sub==='follow'){
@@ -125,23 +137,57 @@ export async function workspaceApi({req,res,url,user,pool,body,json,derive,rando
  }
  if(req.method==='POST'&&id&&sub==='documents'){
   await recordById(pool,id,user);const input=await body(req,3000000);assertInput(input);
-  if(typeof input.name!=='string'||!input.name.trim()||input.name.length>200||/[\x00-\x1f/\\]/.test(input.name)||!['application/pdf','image/png','image/jpeg','text/plain','text/csv'].includes(input.mime)||typeof input.content!=='string'||!/^[A-Za-z0-9+/]*={0,2}$/.test(input.content))fail(400,'Upload a PDF, PNG, JPEG, text or CSV file with a valid name.');
-  const content=Buffer.from(input.content,'base64');if(!content.length||content.length>2000000)fail(400,'File size must be between 1 byte and 2 MB.');
-  const visibility=user.role==='erp'&&input.visibility!=='shared'?'internal':'shared';await pool.execute('INSERT INTO record_documents(record_id,user_id,name,mime,content,visibility) VALUES(?,?,?,?,?,?)',[id,user.id,input.name,input.mime,content,visibility]);return json(res,201,{ok:true});
+  const doc=documentInput(input);
+  const visibility=user.role==='erp'&&input.visibility!=='shared'?'internal':'shared';await pool.execute('INSERT INTO record_documents(record_id,user_id,name,mime,content,visibility) VALUES(?,?,?,?,?,?)',[id,user.id,doc.name,doc.mime,doc.content,visibility]);return json(res,201,{ok:true});
  }
  if(!['POST','PUT'].includes(req.method))fail(405,'Method not supported.');
- const input=await body(req);assertInput(input);
+ const input=await body(req,!id||sub==='action'?10000000:100000);assertInput(input);
  const db=await pool.getConnection();
  try{await db.beginTransaction();
-  if(!id){if(user.role!=='erp')fail(403,'Only an admin can create internal records.');const newId=await insert(db,input.kind,input.details,user);await db.commit();return json(res,201,{id:newId});}
+  if(!id){
+   if(user.role==='customer'&&Object.hasOwn(portalFields,input.kind)){
+    if(input.documents!==undefined&&(!Array.isArray(input.documents)||input.documents.length>3))fail(400,'Attach at most three documents.');const documents=(input.documents||[]).map(documentInput);
+    const details=cleanError(()=>{const submitted=validateFields(input.details,portalFields[input.kind]);submitted.title||=input.kind==='courier'?submitted.logistic_id:'Quote inquiry';if(input.kind==='courier')submitted.date||=today();return validateRecord(input.kind,{...submitted,client_user_id:user.id});});
+    const [related]=await db.execute("SELECT u.id FROM business_records r JOIN users u ON u.id=r.owner_id AND u.active=TRUE AND u.role='erp' WHERE CAST(JSON_UNQUOTE(JSON_EXTRACT(r.details,'$.client_user_id')) AS UNSIGNED)=? ORDER BY r.id DESC LIMIT 1",[user.id]);
+    const [fallback]=related.length?[related]:await db.execute("SELECT id FROM users WHERE role='erp' AND active=TRUE ORDER BY (email=?) DESC,id LIMIT 1",[process.env.INTAKE_ADMIN_EMAIL||process.env.ADMIN_EMAIL||'']);
+    const owner=fallback[0];if(!owner)fail(503,'No active account manager is available. Please contact Cargo ASL.');
+    const [created]=await db.execute('INSERT INTO business_records(kind,owner_id,status,details) VALUES(?,?,?,?)',[input.kind,owner.id,input.kind==='quote_request'?'Submitted':'Draft',JSON.stringify(details)]);
+    for(const doc of documents)await db.execute("INSERT INTO record_documents(record_id,user_id,name,mime,content,visibility) VALUES(?,?,?,?,?,'shared')",[created.insertId,user.id,doc.name,doc.mime,doc.content]);
+    await audit(db,user.id,created.insertId,'portal create');await db.commit();return json(res,201,{id:created.insertId});
+   }
+   if(user.role!=='erp')fail(403,'Only an admin can create internal records.');const newId=await insert(db,input.kind,input.details,user);await db.commit();return json(res,201,{id:newId});
+  }
   const record=await recordById(db,id,user,true);
   if(!Number.isSafeInteger(input.version)||record.version!==input.version)fail(409,'This record changed. Reload before saving.');
   if(req.method==='PUT'&&!sub){
-   if(user.role!=='erp'||record.owner_id!==user.id)fail(403,'Only the record owner can edit.');if(!editable(record))fail(409,'This status is locked for editing.');
-   const data=cleanError(()=>validateRecord(record.kind,input.details));await references(db,record.kind,data,user);if(record.details._published)data._published=true;record.details=data;await save(db,record,user,'edit');
+   if(!canEdit(record,user)){if(user.role==='erp'&&record.owner_id===user.id)fail(409,'This status is locked for editing.');fail(403,'You cannot edit this record.');}
+   const submitted=user.role==='customer'?{...cleanError(()=>validateFields(input.details,portalFields[record.kind])),client_user_id:user.id}:input.details;
+   const data=cleanError(()=>validateRecord(record.kind,submitted));await references(db,record.kind,data,user);if(record.details._published)data._published=true;record.details=data;await save(db,record,user,'edit');
   }else if(req.method==='POST'&&sub==='action'){
    const action=input.action;if(!actionsFor(record,user).includes(action))fail(403,'This action is not allowed for your role and the current status.');
+   if(record.kind==='quote_request'&&action==='prepare')fail(400,'Create a quotation linked to this inquiry to complete preparation.');
    const d=record.details;let next;
+   if(record.kind==='target'&&action==='generate_months'){d.monthly_targets=cleanError(()=>generateTargetMonths(d));delete d._actuals;delete d._recomputed_at;}
+   if(record.kind==='target'&&action==='recompute'){const [sources]=await db.execute("SELECT * FROM business_records WHERE owner_id=? AND kind IN ('quote','shipment')",[user.id]);d._actuals=cleanError(()=>targetProgress(d,sources));d._recomputed_at=new Date().toISOString();}
+   if(record.kind==='invoice_request'){
+    if(action==='upload'){
+     if(!Array.isArray(input.invoices)||input.invoices.length<1||input.invoices.length>3)fail(400,'Upload between one and three invoices.');
+     const uploaded=input.invoices.map(invoice=>({metadata:cleanError(()=>validateFields(invoice,rowSpecs.requestInvoices)),document:documentInput(invoice.document)}));
+     if(uploaded.some(i=>i.metadata.currency!==d.currency||scaled(i.metadata.total)<=0n||!['application/pdf','image/png','image/jpeg'].includes(i.document.mime)))fail(400,'Invoice totals must be positive, in the request currency, with a PDF or image.');
+     const numbers=uploaded.map(i=>i.metadata.bill_number);if(new Set(numbers).size!==numbers.length)fail(400,'Invoice numbers must be unique in this submission.');
+     d.submitted_invoices=[];delete d.rejection_reason;
+     for(const invoice of uploaded){const doc=invoice.document;const [saved]=await db.execute("INSERT INTO record_documents(record_id,user_id,name,mime,content,visibility) VALUES(?,?,?,?,?,'shared')",[id,user.id,doc.name,doc.mime,doc.content]);d.submitted_invoices.push({...invoice.metadata,document_id:saved.insertId});}
+    }
+    if(action==='reject'){if(typeof input.reason!=='string'||!input.reason.trim()||input.reason.length>2000)fail(400,'A rejection reason is required.');d.rejection_reason=input.reason.trim();await db.execute("INSERT INTO record_notes(record_id,user_id,message,visibility) VALUES(?,?,?,'shared')",[id,user.id,'Invoice rejection: '+d.rejection_reason]);}
+    if(['approve','reject'].includes(action)){d.reviewed_by=user.name;d.reviewed_at=new Date().toISOString();}
+    if(action==='approve'){
+     if(!d.submitted_invoices?.length||d._bill_ids?.length)fail(409,'Invoices are missing or this request has already been approved.');d._bill_ids=[];
+     for(const invoice of d.submitted_invoices){
+      const billId=await insert(db,'vendor_bill',{title:invoice.bill_number,organization_id:d.organization_id,vendor_user_id:d.vendor_user_id,shipment_id:d.shipment_id,date:invoice.bill_date,due_date:today(),currency:d.currency,charges:[{description:'Vendor invoice '+invoice.bill_number,quantity:'1',cost_rate:invoice.total,sell_rate:'0',tax_percent:'0'}],notes:'Created from '+record.kind+' '+id+'. Review tax allocation and supporting documents before posting.'},user);d._bill_ids.push(billId);
+      const [copied]=await db.execute("INSERT INTO record_documents(record_id,user_id,name,mime,content,visibility) SELECT ?,?,name,mime,content,'shared' FROM record_documents WHERE id=? AND record_id=?",[billId,user.id,invoice.document_id,id]);if(!copied.affectedRows)fail(409,'The supporting invoice document is missing.');
+     }
+    }
+   }
    if(action==='respond'){
     const rates=cleanError(()=>validateFields({vendor_charges:input.vendor_charges},[{key:'vendor_charges',label:'Vendor rates',type:'rows:vendorCharges',required:true}]));
     if(rates.vendor_charges.some(r=>Number(r.quantity)<=0))fail(400,'Quantity must be positive.');
@@ -155,7 +201,7 @@ export async function workspaceApi({req,res,url,user,pool,body,json,derive,rando
     if(action==='send')d._published=true;
     if(action==='convert'){
      const shipment={...d,title:d.title,quote_id:id,booking_reference:`BK-${String(id).padStart(6,'0')}`,date:today(),po_status:'Pending'};
-     d._converted_id=await insert(db,d.job_type==='Service Job'?'service_job':'shipment',{...shipment,service_type:'From quotation'},user);
+     const service=d.job_type==='Service Job';d._converted_id=await insert(db,service?'service_job':'shipment',service?{...shipment,service_type:'From quotation'}:shipment,user);
     }
    }
    if(record.kind==='lead'&&action==='convert')d._converted_id=await insert(db,'opportunity',{...d,lead_id:id,probability:'25'},user);

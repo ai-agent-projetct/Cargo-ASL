@@ -55,3 +55,11 @@ jobs:
       - run: npm run test:workflow
       - run: npm run demo:workspace
       - run: npm run demo:workspace
+      - name: Install pinned REA browser-test CLI
+        run: npm install --global rea-agents@6.5.0 --no-audit --no-fund
+      - name: Real-browser portal acceptance
+        env:
+          BROWSER_EXECUTABLE: /usr/bin/google-chrome
+        run: |
+          export REA_CLI="$(npm root -g)/rea-agents/scripts/rea.mjs"
+          npm run test:browser

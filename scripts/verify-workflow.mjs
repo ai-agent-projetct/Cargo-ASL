@@ -23,7 +23,7 @@ try{
  let lead=await create('lead',{title:'Exhibition enquiry',organization_id:organization.id,expected_revenue:'1000.00'},admin);
  lead=await action(lead,'qualify',admin);lead=await action(lead,'convert',admin);const opportunity=await get(lead.details._converted_id,admin);
  await check('CRM lead qualification creates linked opportunity',async()=>assert.equal(opportunity.details.lead_id,lead.id));
- let quote=await create('quote',{title:'QA ocean quote '+suffix,organization_id:organization.id,opportunity_id:opportunity.id,client_user_id:client.id,approver_user_id:approver.id,company:'Cargo ASL',sales_team:'QA',date:'2026-10-09',expiry_date:'2099-12-31',transport_mode:'Sea Freight',shipment_type:'Export',cargo_type:'Full Container Load',origin:'Rotterdam',destination:'Dubai',origin_country:'Netherlands',destination_country:'United Arab Emirates',incoterm:'FCA',currency:'USD',charges:[{description:'Freight',quantity:'2',cost_rate:'50.00',sell_rate:'100.00',tax_percent:'5'}]},admin);
+ let quote=await create('quote',{title:'QA ocean quote '+suffix,organization_id:organization.id,opportunity_id:opportunity.id,client_user_id:client.id,approver_user_id:approver.id,sales_agent_id:admin.id,company:'Cargo ASL',sales_team:'QA',date:'2026-10-09',expiry_date:'2099-12-31',transport_mode:'Sea Freight',shipment_type:'Export',cargo_type:'Full Container Load',origin:'Rotterdam',destination:'Dubai',origin_country:'Netherlands',destination_country:'United Arab Emirates',incoterm:'FCA',currency:'USD',charges:[{description:'Freight',quantity:'2',cost_rate:'50.00',sell_rate:'100.00',tax_percent:'5'}]},admin);
  await check('draft hidden from client, vendor and other admin; client cannot create',async()=>{
   for(const account of [vendor,client,outsider])assert.equal((await request('/workspace/records/'+quote.id,'GET',undefined,account)).status,404);
   assert.equal((await request('/workspace/records','POST',{kind:'organization',details:organization.details},client)).status,403);
@@ -113,6 +113,61 @@ try{
   assert.equal((await request('/me','GET',undefined,{cookie:login.cookie})).status,401);
   assert.equal((await request('/login','POST',{email:`extra-${suffix}@cargoasl.invalid`,password,portal:'client'})).status,401);
   assert.equal((await request('/login','POST',{email:`extra-${suffix}@cargoasl.invalid`,password:password+'new',portal:'client'})).status,200);
+ });
+ const inquiryDetails={title:'QA client inquiry',contact_name:'Nora Vale',email:'nora@cargoasl.invalid',address:'Aster Grove office',date:'2026-11-04',transport_mode:'Air Freight',shipment_type:'International',cargo_type:'General Cargo',origin:'Amsterdam',destination:'Dubai',origin_country:'Netherlands',destination_country:'United Arab Emirates',pickup:'Warehouse A',delivery:'Venue B',pickup_contact:'Avery',delivery_contact:'Rowan',pickup_at:'2026-11-10T09:00',delivery_at:'2026-11-12T17:30',service_type:'Priority',cargo_specification:'Exhibition stand',dangerous:false};
+ let inquiry;
+ await check('client submits an inquiry with documents; identity and status are server controlled',async()=>{
+  const result=await ok('/workspace/records','POST',{kind:'quote_request',status:'Accepted',owner_id:outsider.id,details:{...inquiryDetails,client_user_id:outsider.id,charges:[{cost_rate:'1'}]},documents:[{name:'specification.txt',mime:'text/plain',content:Buffer.from('Fictional cargo specification').toString('base64')}]},client);
+  inquiry=await get(result.id,admin);assert.equal(inquiry.owner_id,admin.id);assert.equal(inquiry.status,'Submitted');assert.equal(inquiry.details.client_user_id,client.id);assert.equal(inquiry.details.charges,undefined);assert.equal(inquiry.documents.length,1);
+  assert.equal((await get(inquiry.id,client)).documents.length,1);assert.equal((await request('/workspace/records/'+inquiry.id,'GET',undefined,outsider)).status,404);
+  assert.equal((await request('/workspace/records','POST',{kind:'quote_request',details:inquiryDetails},vendor)).status,403);
+ });
+ await check('invalid inquiry attachment rejects the entire submission',async()=>{
+  const [before]=await db.execute("SELECT COUNT(*) AS n FROM business_records WHERE kind='quote_request' AND owner_id=?",[admin.id]);
+  assert.equal((await request('/workspace/records','POST',{kind:'quote_request',details:inquiryDetails,documents:[{name:'unsafe.html',mime:'text/html',content:Buffer.from('html').toString('base64')}]},client)).status,400);
+  const [after]=await db.execute("SELECT COUNT(*) AS n FROM business_records WHERE kind='quote_request' AND owner_id=?",[admin.id]);assert.equal(after[0].n,before[0].n);
+ });
+ await check('admin prepares exactly one priced quotation linked to the client inquiry',async()=>{
+  const priced={...quote.details,title:'QA enquiry quotation',source_request_id:inquiry.id};
+  const quotation=await create('quote',priced,admin);const handled=await get(inquiry.id,admin);assert.equal(handled.status,'Quoted');assert.equal(handled.details._converted_id,quotation.id);
+  assert.equal((await get(inquiry.id,client)).details._converted_id,undefined);
+  assert.equal((await request('/workspace/records','POST',{kind:'quote',details:priced},admin)).status,409);
+ });
+ await check('client creates and edits its own courier products; booking locks further edits',async()=>{
+  let parcel=await create('courier',{title:'QA courier parcel',date:'2026-11-04',logistic_id:'QA-'+suffix,client_user_id:outsider.id,goods:[{product:'Display unit',quantity:'2',unit_price:'80.00',currency:'USD'}]},client);
+  assert.equal(parcel.details.client_user_id,client.id);assert.equal(parcel.editable,true);assert.equal((await request('/workspace/records/'+parcel.id,'GET',undefined,outsider)).status,404);
+  parcel=await ok('/workspace/records/'+parcel.id,'PUT',{version:parcel.version,details:{...parcel.details,logistic_partner:'Blue Horizon Courier',client_user_id:outsider.id}},client);
+  assert.equal(parcel.details.client_user_id,client.id);parcel=await action(await get(parcel.id,admin),'book',admin);
+  assert.equal((await request('/workspace/records/'+parcel.id,'PUT',{version:parcel.version,details:parcel.details},client)).status,403);
+ });
+ let invoiceRequest=await create('invoice_request',{title:'QA requested vendor invoices',organization_id:organization.id,shipment_id:shipment.id,vendor_user_id:vendor.id,date:'2026-11-04',currency:'USD',requested_charges:[{description:'Terminal service',quantity:'1',cost_rate:'80.00',currency:'USD'}]},admin);
+ invoiceRequest=await action(invoiceRequest,'send',admin);
+ const invoiceUpload={invoices:[{bill_number:'QA-VENDOR-'+suffix,bill_date:'2026-11-04',currency:'USD',total:'80.00',document:{name:'invoice.pdf',mime:'application/pdf',content:Buffer.from('%PDF-1.4\nFictional QA document').toString('base64')}}]};
+ await check('only the assigned vendor uploads invoices and upload validation is atomic',async()=>{
+  assert.equal((await request('/workspace/records/'+invoiceRequest.id+'/action','POST',{...invoiceUpload,version:invoiceRequest.version,action:'upload'},client)).status,404);
+  const invalid=structuredClone(invoiceUpload);invalid.invoices[0].currency='EUR';
+  assert.equal((await request('/workspace/records/'+invoiceRequest.id+'/action','POST',{...invalid,version:invoiceRequest.version,action:'upload'},vendor)).status,400);
+  assert.equal((await get(invoiceRequest.id,admin)).documents.length,0);
+ });
+ invoiceRequest=await action(invoiceRequest,'upload',vendor,invoiceUpload);
+ await check('invoice rejection requires a reason visible to the vendor',async()=>{
+  assert.equal(invoiceRequest.status,'Vendor Invoice Upload - Approval Pending');
+  assert.equal((await request('/workspace/records/'+invoiceRequest.id+'/action','POST',{version:invoiceRequest.version,action:'reject'},admin)).status,400);
+  invoiceRequest=await action(invoiceRequest,'reject',admin,{reason:'Please correct the invoice number'});
+  assert.equal((await get(invoiceRequest.id,vendor)).details.rejection_reason,'Please correct the invoice number');
+ });
+ invoiceRequest=await action(invoiceRequest,'upload',vendor,invoiceUpload);invoiceRequest=await action(invoiceRequest,'approve',admin);
+ await check('approved vendor invoice creates one draft bill with its original document',async()=>{
+  assert.equal(invoiceRequest.status,'Vendor Invoice Approved');assert.equal(invoiceRequest.details.rejection_reason,undefined);assert.equal(invoiceRequest.details._bill_ids.length,1);
+  const bill=await get(invoiceRequest.details._bill_ids[0],admin);assert.equal(bill.status,'Draft');assert.equal(bill.totals.total,'80.00');assert.equal(bill.documents.length,1);
+  assert.equal((await request('/workspace/records/'+invoiceRequest.id+'/action','POST',{version:invoiceRequest.version,action:'approve'},admin)).status,403);
+  const [entries]=await db.execute('SELECT COUNT(*) AS n FROM ledger_entries WHERE record_id=?',[bill.id]);assert.equal(entries[0].n,0);
+ });
+ await check('sales targets generate monthly lines and recompute actuals from linked-agent records',async()=>{
+  let target=await create('target',{title:'QA freight target',sales_agent_id:admin.id,currency:'USD',date_from:'2026-01-01',date_to:'2026-12-31',parameter:'Quotation',value:'12'},admin);
+  target=await action(target,'generate_months',admin);assert.equal(target.details.monthly_targets.length,12);assert.ok(target.details.monthly_targets.every(row=>row.value==='1.0000'));
+  target=await action(target,'recompute',admin);assert.ok(target.details._actuals.reduce((sum,row)=>sum+Number(row.actual),0)>=1);assert.ok(target.details._recomputed_at);
+  assert.equal((await request('/workspace/records/'+target.id,'GET',undefined,client)).status,404);
  });
  console.log(`PASS: ${checks} end-to-end workflow checks. Temporary fixtures will be removed.`);
 }finally{

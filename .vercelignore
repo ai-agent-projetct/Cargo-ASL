@@ -9,6 +9,7 @@
 !workspace-api.mjs
 !mailer.mjs
 !reports.mjs
+!targets.mjs
 !vercel.json
 !public
 !public/**

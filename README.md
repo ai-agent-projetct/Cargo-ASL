@@ -21,13 +21,16 @@ On this workstation, `Start Cargo ASL.cmd` starts the app and dedicated MySQL in
 
 - CRM organizations, prospects, leads, opportunities, activities and sales targets.
 - Editable quotations with packages, charge lines, exchange rates, tax and exact decimal totals; nominated approval, publication, customer decisions, expiry and conversion.
+- Client quote inquiries with pickup/delivery contacts and times, service priority, cargo specifications, special handling and documents. Account managers prepare a linked priced quotation; duplicate preparation is rejected.
+- Client-created courier shipments with product quantities, UOM, PO/invoice references, HS codes, unit prices, currencies, lots and production/expiry dates.
 - Vendor rate requests and portal rate submissions, with approved rates imported into an editable quotation.
+- Vendor invoice requests, PDF/image submissions, rejection with reasons, resubmission and approval. Approval creates draft supplier bills with their original documents; posting remains a separate reviewed action.
 - Shipments, service jobs and carrier bookings, including parties, packages, routing, milestones, customs, insurance and document details.
 - Pro forma conversion, invoice and supplier-bill posting, partial/full payments, credit notes and balanced ledger entries.
 - Master-data categories, tariffs, account creation, activation/deactivation and password resets that invalidate sessions.
 - Internal/shared notes and attachments, audit history, record followers and notifications.
 - Search, filters, saved filters, grouping, list/kanban/date views, charge CSV import, CSV exports and printable records.
-- Nineteen report views, including charge estimates vs actuals, profit, outstanding balances, customer volumes, courier shipments and recorded emissions. Currencies remain separate. Credits without a charge allocation appear separately.
+- Twenty report views, including charge estimates vs actuals, profit, outstanding balances, customer volumes, courier shipments, recorded emissions and sales targets. Targets support weight, volume, revenue, margin, quotation count and TEUs. Monthly regeneration allocates totals equally, with editable monthly lines; equivalence to the source allocation formula is unverified.
 - Email outbox with reviewed messages and actual SMTP delivery when configured. Demo addresses are blocked. SMTP credentials are optional locally; an unconfigured outbox does not report messages as sent.
 
 Existing earlier quotation drafts remain accessible at `/legacy`. They are a separate data model and are not automatically migrated into the new workspace. The earlier read-only visual preview is `/legacy?preview=1`.
@@ -41,10 +44,14 @@ npm run test:portals
 npm run test:workflow
 ```
 
+REA 6.5.0 is also used for real-browser acceptance. Set `REA_CLI` to your installed `rea-agents/scripts/rea.mjs` and `BROWSER_EXECUTABLE` to Chrome, then run `npm run test:browser`. The six scenarios use fictional temporary records and clean them up. Captures remain private under `.local/browser-tests/`. GitHub Actions installs the pinned REA CLI and runs these scenarios too.
+
+New clients are routed to the active account manager associated with their existing Cargo ASL records. For clients without existing records, `INTAKE_ADMIN_EMAIL` selects the intake manager; otherwise the initial administrator or first active admin receives the request.
+
 The API suites require the app and a development MySQL database; temporary fixtures are removed afterward. GitHub Actions runs the suites against disposable MySQL and checks repeatable demo initialization.
 
 ## Deployment and acceptance
 
 Never commit `.env`, `.local`, credentials or MySQL data. Vercel configuration is prepared, but a cloud MySQL database and authenticated deployment are still required. See [deployment notes](docs/vercel-deployment.md).
 
-Real-browser acceptance of the new workspace remains pending because the browser connection disconnected. DOM tests do not replace that check. Source company/group permissions, mode-specific rules, document templates and external carrier/onboarding integrations are not verified as equivalent. Tracking and emissions currently use manually entered records; actual email delivery requires SMTP configuration. The workspace currently loads up to 5,000 accessible records and displays a warning if this limit is reached; larger deployments need server pagination and complete report aggregation. Public deployment also needs shared rate-limit enforcement, backups and operational acceptance.
+Six real-browser scenarios now cover client inquiry/courier creation, admin pricing and publication, client acceptance, the vendor invoice-upload dialog and mobile navigation. They do not establish full source parity. Source company/group permissions, all mode-specific rules, document templates and external carrier/onboarding integrations remain unverified. Tracking and emissions currently use manually entered records; actual email delivery requires SMTP configuration. The workspace loads up to 5,000 accessible records and warns if the limit is reached; larger deployments need server pagination and complete report aggregation. Public deployment also needs shared rate-limit enforcement, backups and operational acceptance. See the [upgrade comparison](docs/upgrade-audit.md) for confirmed remaining gaps.

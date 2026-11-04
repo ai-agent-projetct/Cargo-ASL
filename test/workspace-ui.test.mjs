@@ -7,6 +7,7 @@ async function waitFor(condition){for(let i=0;i<100;i++){if(condition())return;a
 async function harness(role='erp',authenticated=true){
  const portal={erp:'admin',vendor:'vendor',customer:'client'}[role];
  const dom=new JSDOM('<div id="app"></div>',{url:`http://127.0.0.1:3000/login/${portal}`});
+ dom.window.scrollTo=()=>{};
  dom.window.HTMLDialogElement.prototype.showModal=function(){this.open=true;};
  for(const name of ['window','document','location','localStorage','FormData','FileReader','File','Blob'])globalThis[name]=name==='window'?dom.window:dom.window[name];
  const user={id:1,name:'QA User',role,email:'qa@cargoasl.invalid'};
@@ -59,5 +60,25 @@ test('workspace form and portal handlers in an emulated DOM',async t=>{
  });
  await t.test('email outbox clearly reports missing configuration',async()=>{
   const {document}=await harness();document.querySelector('[data-nav=mail]').click();assert.match(document.body.textContent,/Delivery requires SMTP_HOST/);assert.match(document.querySelector('h1').textContent,/Email outbox/);
+ });
+ await t.test('client can open inquiry and courier forms without admin identity controls',async()=>{
+  const {document,requests}=await harness('customer');document.querySelector('[data-nav=quote]').click();document.querySelector('[data-action=request-quote]').click();await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(document.querySelector('[name=contact_name]').value,'QA User');assert.equal(document.querySelector('[name=pickup_at]').type,'datetime-local');assert.equal(document.querySelector('[name=client_user_id]'),null);assert.ok(document.querySelector('#portal-documents'));
+  document.querySelector('[name=title]').value='QA portal inquiry';document.querySelector('[name=address]').value='Aster Grove';
+  document.querySelector('#record-form').dispatchEvent(new window.Event('submit',{cancelable:true}));await waitFor(()=>requests.some(r=>r.method==='POST'&&r.path==='/api/workspace/records'));
+  assert.equal(requests.find(r=>r.method==='POST'&&r.path==='/api/workspace/records').input.kind,'quote_request');
+  await waitFor(()=>document.querySelector('[data-action=back]'));await new Promise(resolve=>setImmediate(resolve));
+  document.querySelector('[data-nav=courier]').click();document.querySelector('[data-action=create]').click();await new Promise(resolve=>setImmediate(resolve));
+  document.querySelector('[data-add=goods]').click();assert.ok(document.querySelector('[name="goods.0.product"]'));assert.ok(document.querySelector('[name=logistic_id]'));assert.equal(document.querySelector('[name=client_user_id]'),null);
+ });
+ await t.test('route filters compose and saved filters restore their selections',async()=>{
+  const {document,records}=await harness('customer');
+  for(const [id,title,transport_mode,shipment_type]of [[21,'Air export','Air Freight','Export'],[22,'Road export','Road Freight','Export'],[23,'Air import','Air Freight','Import']])records.push({id,kind:'shipment',status:'Booked',details:{title,transport_mode,shipment_type,cargo_type:'General Cargo'}});
+  document.querySelector('[data-action=refresh]').click();await waitFor(()=>document.querySelector('[data-open="21"]'));await new Promise(resolve=>setImmediate(resolve));document.querySelector('[data-nav=shipment]').click();
+  const change=(id,value)=>{const field=document.querySelector('#'+id);field.value=value;field.dispatchEvent(new window.Event('change'));};
+  change('route-transport_mode','Air Freight');change('route-shipment_type','Export');
+  assert.match(document.querySelector('tbody').textContent,/Air export/);assert.doesNotMatch(document.querySelector('tbody').textContent,/Road export|Air import/);
+  document.querySelector('[data-action=favorite]').click();await new Promise(resolve=>setImmediate(resolve));change('route-transport_mode','Road Freight');
+  document.querySelector('[data-action=restore-filter]').click();await new Promise(resolve=>setImmediate(resolve));assert.equal(document.querySelector('#route-transport_mode').value,'Air Freight');assert.equal(document.querySelector('#route-shipment_type').value,'Export');
  });
 });
