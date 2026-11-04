@@ -6,7 +6,7 @@ The implemented workflows are functional locally. Complete equivalence to the re
 
 ## Run
 
-Use Node 24 or newer and MySQL. On this workstation Node is available at `E:\Tools\OmniRoute\node-v24.21.0-win-x64\node.exe`.
+Use Node 24 or newer and MySQL. On this workstation Node is available at `C:\Program Files\nodejs\node.exe`.
 
 1. Run `npm ci`.
 2. Copy `.env.example` to `.env` only if `.env` does not exist. Set the MySQL connection and initial `ADMIN_EMAIL` / `ADMIN_PASSWORD` (at least 12 characters).
@@ -20,11 +20,11 @@ On this workstation, `Start Cargo ASL.cmd` starts the app and dedicated MySQL in
 ## Workflows
 
 - CRM organizations, prospects, leads, opportunities, activities and sales targets.
-- Editable quotations with packages, charge lines, exchange rates, tax and exact decimal totals; nominated approval, publication, customer decisions, expiry and conversion.
-- Client quote inquiries with pickup/delivery contacts and times, service priority, cargo specifications, special handling and documents. Account managers prepare a linked priced quotation; duplicate preparation is rejected.
-- Client-created courier shipments with product quantities, UOM, PO/invoice references, HS codes, unit prices, currencies, lots and production/expiry dates.
-- Vendor rate requests and portal rate submissions, with approved rates imported into an editable quotation.
-- Vendor invoice requests, PDF/image submissions, rejection with reasons, resubmission and approval. Approval creates draft supplier bills with their original documents; posting remains a separate reviewed action.
+- Editable quotations with packages, charge lines, exchange rates, tax and exact decimal totals; nominated approval or explicit direct publication, customer rejection reasons, revision, expiry and conversion.
+- Client quote inquiries with pickup/delivery contacts and times, service priority, cargo specifications, special handling and documents. Account managers price each inquiry in place, preserving its ID, reference, files and history. Unpublished pricing stays private; duplicate preparation is rejected. Previously prepared linked records are preserved.
+- Client-created courier shipments with product quantities, UOM, PO/invoice references, HS codes, unit prices, currencies, lots and production/expiry dates. Saved courier records are read-only to clients.
+- Vendor rate requests with saved drafts, validity dates and portal submission. Submitted costs automatically reach an owned, editable quotation once; admins set selling prices separately.
+- Vendor invoice requests, complete invoice drafts, submission of saved original files, rejection with reasons, resubmission and approval. Approval creates draft supplier bills with their original documents; posting remains a separate reviewed action.
 - Shipments, service jobs and carrier bookings, including parties, packages, routing, milestones, customs, insurance and document details.
 - Pro forma conversion, invoice and supplier-bill posting, partial/full payments, credit notes and balanced ledger entries.
 - Master-data categories, tariffs, account creation, activation/deactivation and password resets that invalidate sessions.
@@ -44,7 +44,7 @@ npm run test:portals
 npm run test:workflow
 ```
 
-REA 6.5.0 is also used for real-browser acceptance. Set `REA_CLI` to your installed `rea-agents/scripts/rea.mjs` and `BROWSER_EXECUTABLE` to Chrome, then run `npm run test:browser`. The six scenarios use fictional temporary records and clean them up. Captures remain private under `.local/browser-tests/`. GitHub Actions installs the pinned REA CLI and runs these scenarios too.
+REA 6.5.0 is also used for real-browser acceptance. Set `REA_CLI` to your installed `rea-agents/scripts/rea.mjs` and `BROWSER_EXECUTABLE` to Chrome, then run `npm run test:browser`. The eight scenarios use fictional temporary records and clean them up. Captures remain private under `.local/browser-tests/`. GitHub Actions installs the pinned REA CLI and runs these scenarios too.
 
 New clients are routed to the active account manager associated with their existing Cargo ASL records. For clients without existing records, `INTAKE_ADMIN_EMAIL` selects the intake manager; otherwise the initial administrator or first active admin receives the request.
 
@@ -54,4 +54,4 @@ The API suites require the app and a development MySQL database; temporary fixtu
 
 Never commit `.env`, `.local`, credentials or MySQL data. Vercel configuration is prepared, but a cloud MySQL database and authenticated deployment are still required. See [deployment notes](docs/vercel-deployment.md).
 
-Six real-browser scenarios now cover client inquiry/courier creation, admin pricing and publication, client acceptance, the vendor invoice-upload dialog and mobile navigation. They do not establish full source parity. Source company/group permissions, all mode-specific rules, document templates and external carrier/onboarding integrations remain unverified. Tracking and emissions currently use manually entered records; actual email delivery requires SMTP configuration. The workspace loads up to 5,000 accessible records and warns if the limit is reached; larger deployments need server pagination and complete report aggregation. Public deployment also needs shared rate-limit enforcement, backups and operational acceptance. See the [upgrade comparison](docs/upgrade-audit.md) for confirmed remaining gaps.
+Eight real-browser scenarios now cover client inquiry/dimensions and courier creation, admin pricing/publication, client acceptance, vendor rate draft/submission, the vendor invoice-upload dialog and mobile navigation. They do not establish full source parity. Source company/group permissions, all mode-specific rules, document templates and external carrier/onboarding integrations remain unverified. Tracking and emissions currently use manually entered records; actual email delivery requires SMTP configuration. The workspace loads up to 5,000 accessible records and warns if the limit is reached; larger deployments need server pagination and complete report aggregation. Public deployment also needs shared rate-limit enforcement, backups and operational acceptance. See the [upgrade comparison](docs/upgrade-audit.md) for confirmed remaining gaps.

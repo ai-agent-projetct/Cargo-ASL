@@ -19,21 +19,56 @@ test('courier product quantities, dates and tracking links enforce safe values',
  assert.throws(()=>validateRecord('courier',{...valid,goods:[{product:'Box',quantity:'0'}]}));
  assert.throws(()=>validateRecord('courier',{...valid,goods:[{product:'Box',quantity:'1',production_date:'2026-11-02',expiration_date:'2026-11-01'}]}));
 });
-test('only the assigned client edits a courier draft; booking locks client edits',()=>{
+test('saved courier records are read-only to clients, including drafts',()=>{
  const draft={kind:'courier',owner_id:1,status:'Draft',details:{client_user_id:7}};
  assert.equal(canRead(draft,{id:7,role:'customer'}),true);assert.equal(canRead(draft,{id:8,role:'customer'}),false);
- assert.equal(canEdit(draft,{id:7,role:'customer'}),true);assert.equal(canEdit(draft,{id:8,role:'customer'}),false);
+ assert.equal(canEdit(draft,{id:7,role:'customer'}),false);assert.equal(canEdit(draft,{id:8,role:'customer'}),false);
+ assert.equal(canEdit(draft,{id:1,role:'erp'}),true);
  assert.equal(canEdit({...draft,status:'Booked'},{id:7,role:'customer'}),false);
+});
+
+test('inquiry package dimensions and SGD survive validation without inventing computed totals',()=>{
+ const packages=[{type:'Box',count:'2',weight:'20',weight_unit:'kg',length:'100',width:'50',height:'40',dimension_unit:'cm',hs_code:'940320',hazardous:false,description:'Fictional display stand'}];
+ const result=validateRecord('quote_request',{...inquiry,cargo_type:'Loose',packages});
+ assert.deepEqual(result.packages,packages);assert.equal(result.volume,undefined);
+ for(const change of [{count:'0'},{height:''},{dimension_unit:''},{length:'0'}])assert.throws(()=>validateRecord('quote_request',{...inquiry,packages:[{...packages[0],...change}]}));
+ assert.equal(validateRecord('courier',{title:'QA',date:'2026-11-04',client_user_id:7,logistic_id:'QA',goods:[{product:'Box',quantity:'1',currency:'SGD'}]}).goods[0].currency,'SGD');
+});
+
+test('cargo selections are constrained to transport mode while legacy general cargo remains readable',()=>{
+ for(const [transport_mode,cargo_type] of [['Air Freight','ULD'],['Road Freight','Full Truck Load'],['Sea Freight','Liquid'],['Rail Freight','Bulk']])assert.equal(validateRecord('quote_request',{...inquiry,transport_mode,cargo_type}).cargo_type,cargo_type);
+ assert.throws(()=>validateRecord('quote_request',{...inquiry,cargo_type:'Full Container Load'}),/transport mode/);
+ assert.equal(validateRecord('quote_request',inquiry).cargo_type,'General Cargo');
 });
 test('vendor invoice requests separate vendor upload from internal approval',()=>{
  const request={kind:'invoice_request',owner_id:1,status:'Pending Vendor Bill Upload',details:{vendor_user_id:7}};
- assert.deepEqual(actionsFor(request,{id:7,role:'vendor'}),['upload']);assert.deepEqual(actionsFor(request,{id:1,role:'erp'}),[]);assert.equal(canRead(request,{id:8,role:'vendor'}),false);
+ assert.deepEqual(actionsFor(request,{id:7,role:'vendor'}),['upload','save_invoice_draft']);assert.deepEqual(actionsFor(request,{id:1,role:'erp'}),[]);assert.equal(canRead(request,{id:8,role:'vendor'}),false);
  assert.deepEqual(actionsFor({...request,status:'Vendor Invoice Upload - Approval Pending'},{id:1,role:'erp'}),['approve','reject']);
- assert.deepEqual(actionsFor({...request,status:'Vendor Invoice Rejected'},{id:7,role:'vendor'}),['upload']);
+ assert.deepEqual(actionsFor({...request,status:'Vendor Invoice Rejected'},{id:7,role:'vendor'}),['upload','save_invoice_draft']);
 });
-test('clients see their created and cancelled service jobs, while draft financial documents stay private',()=>{
+
+test('direct quote publication requires explicit approval exemption and owning admin',()=>{
+ const quote={kind:'quote',owner_id:1,status:'Draft',details:{client_user_id:7,approver_user_id:2}};
+ assert.ok(!actionsFor(quote,{id:1,role:'erp'}).includes('send'));
+ assert.ok(!actionsFor({...quote,details:{...quote.details,approval_required:true}},{id:1,role:'erp'}).includes('send'));
+ const exempt={...quote,details:{...quote.details,approval_required:false}};
+ assert.ok(actionsFor(exempt,{id:1,role:'erp'}).includes('send'));
+ assert.ok(!actionsFor(exempt,{id:2,role:'erp'}).includes('send'));
+ assert.deepEqual(actionsFor(exempt,{id:7,role:'customer'}),[]);
+ assert.ok(actionsFor({...exempt,status:'Renegotiate'},{id:1,role:'erp'}).includes('send'));
+});
+
+test('only owners can revise rejected quotes, and an existing revision prevents duplicates',()=>{
+ const record={kind:'quote',owner_id:1,status:'Rejected',details:{client_user_id:7,approver_user_id:2,_published:true}};
+ assert.deepEqual(actionsFor(record,{id:1,role:'erp'}),['revise']);assert.deepEqual(actionsFor(record,{id:2,role:'erp'}),[]);assert.deepEqual(actionsFor(record,{id:7,role:'customer'}),[]);
+ assert.deepEqual(actionsFor({...record,details:{...record.details,_revision_id:88}},{id:1,role:'erp'}),[]);
+});
+test('clients see their created jobs, while draft financial documents stay private',()=>{
  const record={owner_id:1,details:{client_user_id:7}};
  assert.equal(canRead({...record,kind:'service_job',status:'Draft'},{id:7,role:'customer'}),true);
  assert.equal(canRead({...record,kind:'service_job',status:'Cancelled'},{id:7,role:'customer'}),true);
+ assert.equal(canRead({...record,kind:'shipment',status:'Draft'},{id:7,role:'customer'}),true);
+ assert.equal(canRead({...record,kind:'shipment',status:'Draft'},{id:8,role:'customer'}),false);
+ assert.equal(canEdit({...record,kind:'shipment',status:'Draft'},{id:7,role:'customer'}),false);
  assert.equal(canRead({...record,kind:'invoice',status:'Draft'},{id:7,role:'customer'}),false);
 });

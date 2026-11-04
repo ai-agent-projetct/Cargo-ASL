@@ -2,7 +2,14 @@ export const masterCategories = ['Incoterms','Carriers','Carrier Agents','HS Cod
 const f=(key,label,type='text',required=false)=>({key,label,type,required});
 const shared=[f('title','Title','text',true),f('organization_id','Organization','ref:organization',true)];
 const route=[f('transport_mode','Transport mode','enum:Sea Freight|Air Freight|Road Freight|Rail Freight',true),f('shipment_type','Shipment type','enum:Export|Import|Cross Trade|Domestic|International|Permanent Import/Export|Temporary Import/Export|ATA Carnets',true),f('cargo_type','Cargo type','enum:Full Container Load|Less Container Load|Break Bulk|Bulk|General Cargo',true),f('origin','Origin','text',true),f('destination','Destination','text',true)];
-const currencies='enum:USD|AED|INR|EUR|GBP';
+const currencies='enum:USD|AED|INR|EUR|GBP|SGD';
+export const cargoTypes={
+ 'Sea Freight':['Break Bulk','Bulk','Courier','Full Container Load','Less Container Load','Liquid','Roll On/Roll Off'],
+ 'Air Freight':['Loose','Courier','ULD','UNA'],
+ 'Road Freight':["Buyer's Consolidation",'Courier','Full Truck Load','Less Truck Load'],
+ 'Rail Freight':['Break Bulk','Bulk','Full Container Load','Less Container Load']
+};
+route[2].type='enum:'+ [...new Set(Object.values(cargoTypes).flat()),'General Cargo'].join('|');
 export const specs={
  organization:{label:'Organizations',prefix:'ORG',module:'Organizations',fields:[f('name','Name','text',true),f('company_type','Type','enum:Company|Individual',true),f('party_type','Party type','enum:Customer|Vendor|Carrier|Agent|Shipper|Consignee',true),f('email','Email','email'),f('phone','Phone'),f('street','Street'),f('street2','Street 2'),f('city','City'),f('state','State'),f('zip','ZIP'),f('country','Country'),f('vat','VAT'),f('uen','UEN'),f('website','Website'),f('contact','Contact person'),f('registration','Registration number'),f('reference','Internal reference'),f('tags','Tags'),f('payment_terms','Payment terms'),f('credit_limit','Credit limit','money'),f('addresses','Addresses','rows:addresses'),f('notes','Internal notes','long')]},
  prospect:{label:'Prospects',prefix:'PROS',module:'Sales & CRM',fields:[...shared,f('contact','Contact'),f('email','Email','email'),f('phone','Phone'),f('source','Source'),f('notes','Notes','long')]},
@@ -24,7 +31,7 @@ export const specs={
 export const rowSpecs={
  charges:[f('description','Description','text',true),f('quantity','Quantity','decimal',true),f('cost_rate','Cost rate','money',true),f('sell_rate','Sell rate','money',true),f('tax_percent','Tax %','percent'),f('exchange_rate','Exchange rate','decimal'),f('currency','Line currency',currencies),f('note','Note')],
  vendorCharges:[f('description','Description','text',true),f('quantity','Quantity','decimal',true),f('cost_rate','Rate','money',true),f('currency','Currency',currencies),f('note','Note')],
- packages:[f('type','Package / container type','text',true),f('count','Count','integer',true),f('commodity','Commodity'),f('weight','Weight kg','decimal'),f('volume','Volume m³','decimal'),f('teu','TEU','decimal')],
+ packages:[f('type','Package / container type','text',true),f('count','Count','integer',true),f('commodity','Commodity'),f('weight','Gross weight','decimal'),f('weight_unit','Weight unit','enum:g|oz|lb|kg|t'),f('length','Length','decimal'),f('width','Width','decimal'),f('height','Height','decimal'),f('dimension_unit','Dimension unit','enum:mm|cm|in|ft|m|km|mi'),f('volume','Volume m³','decimal'),f('teu','TEU','decimal'),f('hs_code','HS code'),f('hazardous','Hazardous','boolean'),f('description','Goods description','long')],
  addresses:[f('type','Type','enum:Office|Billing|Pickup|Delivery',true),f('street','Street','text',true),f('city','City'),f('country','Country'),f('contact','Contact'),f('phone','Phone')],
  parties:[f('type','Party type','text',true),f('name','Party','text',true),f('address','Address')],
  routing:[f('description','Description','text',true),f('transporter','Transporter'),f('identification','Transport ID'),f('mode','Mode',route[0].type),f('origin','From','text',true),f('destination','To','text',true)],
@@ -34,8 +41,13 @@ specs.carrier_booking={label:'Carrier Bookings',prefix:'CB',module:'Operations',
 specs.quote_request={label:'Quote Inquiries',prefix:'RFQ',module:'Sales & CRM',fields:[f('title','Reference / title','text',true),f('client_user_id','Client account','user:customer',true),f('contact_name','Customer name','text',true),f('email','Customer email','email',true),f('address','Customer address','long',true),f('date','Date','date',true),...route,f('origin_country','Origin country','text',true),f('destination_country','Destination country','text',true),f('incoterm','Incoterm'),f('pickup','Pickup location','text',true),f('delivery','Delivery location','text',true),f('pickup_contact','Pickup contact','text',true),f('delivery_contact','Delivery contact','text',true),f('pickup_at','Pickup date & time','datetime',true),f('delivery_at','Delivery date & time','datetime',true),f('service_type','Service type','enum:Standard|Priority',true),f('cargo_specification','Cargo specification','long',true),f('dangerous','Hazardous','boolean'),f('stackable','Stackable','boolean'),f('temperature','Temperature control','boolean'),f('special_consideration','Special consideration','long')]};
 rowSpecs.courierGoods=[f('product','Product','text',true),f('quantity','Quantity','decimal',true),f('uom','Quantity UOM'),f('po_number','PO number'),f('invoice_number','Invoice number'),f('order_date','Order date','date'),f('description','Description'),f('hs_code','HS code'),f('unit_price','Unit price','money'),f('currency','Currency',currencies),f('lot_code','Lot code'),f('production_date','Production date','date'),f('expiration_date','Expiration date','date')];
 specs.courier={label:'Courier Shipments',prefix:'COU',module:'Operations',fields:[f('title','Shipment reference','text',true),f('client_user_id','Client account','user:customer',true),f('date','Date','date',true),f('logistic_id','Logistic ID','text',true),f('logistic_partner','Logistic partner'),f('shipper','Shipper'),f('consignee','Consignee'),f('tracking_url','Cargo tracking URL','url'),f('goods','Goods','rows:courierGoods'),f('notes','Notes','long')]};
+specs.quote_request.fields.push(f('packages','Packages / dimensions','rows:packages'));
 export const portalFields=Object.fromEntries(['quote_request','courier'].map(kind=>[kind,specs[kind].fields.filter(field=>field.key!=='client_user_id')]));
 specs.quote.fields.push(f('source_request_id','Source inquiry','ref:quote_request'));
+specs.quote.fields.push(f('approval_required','Require internal approval before publication','boolean'));
+specs.quote.fields.push(f('revised_from_id','Revised from quotation','ref:quote'));
+specs.quote.fields.push(f('contact_name','Customer name'),f('email','Customer email','email'),f('address','Customer address','long'));
+specs.rate_request.fields.push(f('validity_date','Vendor validity date','date'));
 specs.shipment.fields.push(f('sales_agent_id','Sales agent','user:erp'));
 specs.target.fields=specs.target.fields.map(field=>['month','revenue'].includes(field.key)?{...field,required:false}:field);
 specs.target.fields.push(f('reporting_manager_id','Reporting manager','user:erp'),f('date_from','Target from','date'),f('date_to','Target to','date'),f('parameter','Target parameter','enum:Weight|Volume|Gross Revenue|Gross Margin|Quotation|TEUs'),f('value','Target value','decimal'),...route.slice(0,3).map(field=>({...field,required:false})),f('incentive','Incentive','enum:Amount|Percentage'),f('incentive_unit','Incentive unit','decimal'),f('incentive_unit_type','Incentive unit type','enum:NET PROFIT|GROSS REVENUE|FREIGHT AMOUNT'),f('company','Company'),f('monthly_targets','Monthly targets','rows:monthlyTargets'));
@@ -69,6 +81,13 @@ export function validateRecord(kind,input){
  const data=validateFields(input,specs[kind].fields);
  for(const [from,to]of [['date','expiry_date'],['valid_from','valid_to']])if(data[from]&&data[to]&&data[from]>data[to])throw new Error('End date cannot precede start date.');
  if(data.pickup_at&&data.delivery_at&&data.pickup_at>data.delivery_at)throw new Error('Delivery cannot precede pickup.');
+ if(data.transport_mode&&data.cargo_type&&data.cargo_type!=='General Cargo'&&!cargoTypes[data.transport_mode]?.includes(data.cargo_type))throw new Error('Cargo type is not available for this transport mode.');
+ for(const row of data.packages||[]){
+  if(Number(row.count)<=0)throw new Error('Package count must be positive.');
+  const dimensions=['length','width','height'].filter(key=>row[key]!==undefined);
+  if(dimensions.length&&(dimensions.length!==3||!row.dimension_unit||dimensions.some(key=>Number(row[key])<=0)))throw new Error('Provide positive length, width and height with a dimension unit.');
+  if(row.weight!==undefined&&!row.weight_unit)row.weight_unit='kg';
+ }
  for(const row of data.goods||[]){if(Number(row.quantity)<=0)throw new Error('Goods quantity must be positive.');if(row.production_date&&row.expiration_date&&row.production_date>row.expiration_date)throw new Error('Goods expiration cannot precede production.');}
  for(const row of data.requested_charges||[])if(Number(row.quantity)<=0||row.currency!==data.currency)throw new Error('Requested charges require a positive quantity and the request currency.');
  if(kind==='target'){
@@ -111,32 +130,39 @@ export const workflows={
  master:{Draft:{activate:'Active',archive:'Archived'},Active:{archive:'Archived'},Archived:{restore:'Active'}},
  target:{Draft:{activate:'Active',archive:'Archived'},Active:{archive:'Archived'}}
 };
+workflows.rate_request.Pending.save_rates='Pending';
+workflows.quote.Draft.send='Sent';
+workflows.quote.Renegotiate.send='Sent';
+for(const status of ['Rejected','Expired','Cancelled'])workflows.quote[status]={revise:status};
 workflows.carrier_booking={Draft:{submit:'Pending',cancel:'Cancelled'},Pending:{approve:'Confirmed',cancel:'Cancelled'},Confirmed:{complete:'Completed',cancel:'Cancelled'}};
 workflows.quote_request={Draft:{submit:'Submitted',cancel:'Cancelled'},Submitted:{prepare:'Quoted',reject:'Rejected'},Quoted:{}};
 workflows.courier={Draft:{book:'Booked',cancel:'Cancelled'},Booked:{depart:'In Transit',cancel:'Cancelled'},'In Transit':{complete:'Completed'}};
 workflows.invoice_request={Draft:{send:'Pending Vendor Bill Upload'},'Pending Vendor Bill Upload':{upload:'Vendor Invoice Upload - Approval Pending'},'Vendor Invoice Upload - Approval Pending':{approve:'Vendor Invoice Approved',reject:'Vendor Invoice Rejected'},'Vendor Invoice Rejected':{upload:'Vendor Invoice Upload - Approval Pending'}};
+for(const status of ['Pending Vendor Bill Upload','Vendor Invoice Rejected'])Object.assign(workflows.invoice_request[status],{save_invoice_draft:status,submit_invoice_draft:'Vendor Invoice Upload - Approval Pending'});
 for(const status of ['Draft','Active'])Object.assign(workflows.target[status],{generate_months:status,recompute:status});
 export function canRead(record,user){
  if(user.role==='erp')return record.owner_id===user.id||record.details.approver_user_id===user.id||record.details.responsible_user_id===user.id||record.details.assigned_user_id===user.id||record.kind==='master';
  if(user.role==='vendor')return ['rate_request','vendor_bill','invoice_request'].includes(record.kind)&&record.details.vendor_user_id===user.id&&record.status!=='Draft';
  if(['quote_request','courier'].includes(record.kind))return record.details.client_user_id===user.id;
- if(record.kind==='service_job')return record.details.client_user_id===user.id;
- return ['quote','shipment','service_job','invoice','proforma','credit_note'].includes(record.kind)&&record.details.client_user_id===user.id&&(record.kind==='quote'?record.details._published===true:!['Draft','To Approve','Approved','Cancelled'].includes(record.status));
+ if(['shipment','service_job'].includes(record.kind))return record.details.client_user_id===user.id;
+ return ['quote','shipment','service_job','invoice','proforma','credit_note'].includes(record.kind)&&record.details.client_user_id===user.id&&(record.kind==='quote'?record.details._published===true||record.details._portal_inquiry===true:!['Draft','To Approve','Approved','Cancelled'].includes(record.status));
 }
 export function actionsFor(record,user){
  if(!canRead(record,user))return [];
  let actions=Object.keys(workflows[record.kind]?.[record.status]||{});
- if(user.role==='vendor')return record.kind==='rate_request'?actions.filter(a=>a==='respond'):record.kind==='invoice_request'?actions.filter(a=>a==='upload'):[];
+ if(user.role==='vendor')return record.kind==='rate_request'?actions.filter(a=>['respond','save_rates'].includes(a)):record.kind==='invoice_request'?actions.filter(a=>['upload','save_invoice_draft'].includes(a)||(a==='submit_invoice_draft'&&record.details._invoice_draft)):[];
  if(user.role==='customer')return record.kind==='quote'?actions.filter(a=>['accept','reject','renegotiate'].includes(a)):[];
  if(record.owner_id!==user.id){
   if(record.kind==='quote'&&record.details.approver_user_id===user.id&&['To Approve','Pricing Team Approval'].includes(record.status))return actions.filter(a=>['approve','reject'].includes(a));
   if(record.kind==='activity'&&record.details.assigned_user_id===user.id)return actions.filter(a=>a==='complete');
   return [];
  }
- actions=actions.filter(a=>a!=='upload'&&(!['respond','accept','renegotiate'].includes(a)||record.kind==='rate_request'));
+ actions=actions.filter(a=>!['upload','save_rates','save_invoice_draft','submit_invoice_draft'].includes(a)&&(!['respond','accept','renegotiate'].includes(a)||record.kind==='rate_request'));
  if(record.kind==='quote'&&record.status==='Sent')actions=actions.filter(a=>a!=='reject');
+ if(record.kind==='quote'&&['Draft','Renegotiate'].includes(record.status))actions=actions.filter(a=>a!=='send'||record.details.approval_required===false);
+ if(record.kind==='quote'&&record.details._revision_id)actions=actions.filter(a=>a!=='revise');
  if(record.kind==='quote')actions=actions.filter(a=>!['approve','reject'].includes(a)||record.details.approver_user_id===user.id);
  return actions;
 }
 export const editable=record=>['Draft','Active','Renegotiate','Qualified','In Progress','Booked','In Transit','Arrived'].includes(record.status);
-export const canEdit=(record,user)=>user.role==='erp'?record.owner_id===user.id&&editable(record):user.role==='customer'&&record.kind==='courier'&&record.details.client_user_id===user.id&&record.status==='Draft';
+export const canEdit=(record,user)=>user.role==='erp'&&record.owner_id===user.id&&editable(record);

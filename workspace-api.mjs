@@ -12,12 +12,13 @@ function documentInput(input){
 }
 function projected(record,user){
  const result=structuredClone(record);
- result.number=`${specs[result.kind].prefix}-${String(result.id).padStart(6,'0')}`;
+ result.number=`${result.details._portal_inquiry?specs.quote_request.prefix:specs[result.kind].prefix}-${String(result.id).padStart(6,'0')}`;
  result.actions=actionsFor(record,user);
  result.editable=canEdit(record,user);
  if(result.details.charges)result.totals=documentTotals(record.kind,result.details.charges);
  if(user.role==='customer'){
-  for(const key of ['_converted_id','_invoice_id','_credit_note_id'])delete result.details[key];
+  if(record.kind==='quote'&&!record.details._published){delete result.details.charges;delete result.totals;}
+  for(const key of ['_converted_id','_invoice_id','_credit_note_id','_revision_id'])delete result.details[key];
   for(const line of result.details.charges||[])delete line.cost_rate;
   if(result.totals){delete result.totals.cost;delete result.totals.profit;delete result.totals.margin;result.totals.lines.forEach(line=>delete line.cost);}
   for(const key of ['approver_user_id','sales_agent_id','sales_team','vendor_user_id','_published'])delete result.details[key];
@@ -35,20 +36,26 @@ async function references(db,kind,data,user){
   if(field.type.startsWith('user:')){const [rows]=await db.execute('SELECT id FROM users WHERE id=? AND active=TRUE AND role=?',[value,field.type.slice(5)]);if(!rows.length)fail(400,`${field.label} is unavailable.`);}
   else if(field.type.startsWith('ref:')||field.type==='record'){
    const target=await recordById(db,value,user);
-   if(field.type.startsWith('ref:')&&target.kind!==field.type.slice(4))fail(400,`${field.label} has an incorrect record type.`);
-   if(['Archived','Cancelled','Lost'].includes(target.status))fail(400,`${field.label} is inactive.`);
+   if(field.type.startsWith('ref:')&&target.kind!==field.type.slice(4)&&!(field.key==='source_request_id'&&target.kind==='quote'&&target.details._portal_inquiry&&target.details.source_request_id===target.id))fail(400,`${field.label} has an incorrect record type.`);
+   if(field.key!=='revised_from_id'&&['Archived','Cancelled','Lost'].includes(target.status))fail(400,`${field.label} is inactive.`);
    if(field.key!=='organization_id'&&data.organization_id&&target.details.organization_id&&target.details.organization_id!==data.organization_id)fail(400,`${field.label} belongs to a different organization.`);
   }
  }
  if(['invoice','proforma','vendor_bill'].includes(kind))for(const key of ['shipment_id','service_job_id'])if(data[key]){const source=await recordById(db,data[key],user);if(data.currency!==source.details.currency)fail(400,'Document currency must match the linked job.');if(data.client_user_id&&data.client_user_id!==source.details.client_user_id)fail(400,'Client must match the linked job.');}
  if(kind==='invoice_request'){const shipment=await recordById(db,data.shipment_id,user);if(shipment.details.currency!==data.currency)fail(400,'Invoice request currency must match its shipment.');}
+ if(kind==='rate_request'&&data.quote_id){const quote=await recordById(db,data.quote_id,user);if(quote.owner_id!==user.id)fail(400,'Rate requests must link to an owned quotation.');if(quote.details.currency!==data.currency)fail(400,'Rate request currency must match the quotation.');}
  if(kind==='credit_note'){const invoice=await recordById(db,data.invoice_id,user);if(invoice.details.currency!==data.currency||invoice.details.client_user_id!==data.client_user_id)fail(400,'Credit note currency and client must match the invoice.');if(!['Posted','Partially Paid'].includes(invoice.status))fail(400,'Credit notes require an outstanding posted invoice.');}
 }
 async function insert(db,kind,data,user){
- data=cleanError(()=>validateRecord(kind,data));await references(db,kind,data,user);
- let inquiry;if(kind==='quote'&&data.source_request_id){inquiry=await recordById(db,data.source_request_id,user,true);if(inquiry.status!=='Submitted')fail(409,'This inquiry has already been handled.');if(inquiry.details.client_user_id!==data.client_user_id)fail(400,'Quotation client must match the inquiry.');}
+ data=cleanError(()=>validateRecord(kind,data));
+ let inquiry;if(kind==='quote'&&data.source_request_id){inquiry=await recordById(db,data.source_request_id,user,true);if(inquiry.kind!=='quote_request'||inquiry.status!=='Submitted')fail(409,'This inquiry has already been handled.');if(inquiry.owner_id!==user.id)fail(403,'Only the inquiry owner can prepare it.');if(inquiry.details.client_user_id!==data.client_user_id)fail(400,'Quotation client must match the inquiry.');}
+ await references(db,kind,data,user);
+ if(inquiry){
+  data._portal_inquiry=true;
+  await db.execute("UPDATE business_records SET kind='quote',status='Draft',details=?,version=version+1 WHERE id=?",[JSON.stringify(data),inquiry.id]);
+  await audit(db,user.id,inquiry.id,'quotation prepared');return inquiry.id;
+ }
  const [row]=await db.execute('INSERT INTO business_records(kind,owner_id,details) VALUES(?,?,?)',[kind,user.id,JSON.stringify(data)]);
- if(inquiry){inquiry.status='Quoted';inquiry.details._converted_id=row.insertId;await save(db,inquiry,user,'quotation prepared');}
  await audit(db,user.id,row.insertId,'create');return row.insertId;
 }
 async function audit(db,userId,id,action){await db.execute("INSERT INTO audit_log(user_id,entity,entity_id,action) VALUES(?,'record',?,?)",[userId,id,action]);await db.execute('INSERT INTO workspace_notifications(record_id,user_id,message) SELECT record_id,user_id,? FROM record_followers WHERE record_id=? AND user_id<>?',[action,id,userId]);}
@@ -162,7 +169,7 @@ export async function workspaceApi({req,res,url,user,pool,body,json,derive,rando
   if(req.method==='PUT'&&!sub){
    if(!canEdit(record,user)){if(user.role==='erp'&&record.owner_id===user.id)fail(409,'This status is locked for editing.');fail(403,'You cannot edit this record.');}
    const submitted=user.role==='customer'?{...cleanError(()=>validateFields(input.details,portalFields[record.kind])),client_user_id:user.id}:input.details;
-   const data=cleanError(()=>validateRecord(record.kind,submitted));await references(db,record.kind,data,user);if(record.details._published)data._published=true;record.details=data;await save(db,record,user,'edit');
+   const data=cleanError(()=>validateRecord(record.kind,submitted));if(record.details._portal_inquiry){data._portal_inquiry=true;data.source_request_id=record.id;}await references(db,record.kind,data,user);if(record.details._published)data._published=true;record.details=data;await save(db,record,user,'edit');
   }else if(req.method==='POST'&&sub==='action'){
    const action=input.action;if(!actionsFor(record,user).includes(action))fail(403,'This action is not allowed for your role and the current status.');
    if(record.kind==='quote_request'&&action==='prepare')fail(400,'Create a quotation linked to this inquiry to complete preparation.');
@@ -170,13 +177,19 @@ export async function workspaceApi({req,res,url,user,pool,body,json,derive,rando
    if(record.kind==='target'&&action==='generate_months'){d.monthly_targets=cleanError(()=>generateTargetMonths(d));delete d._actuals;delete d._recomputed_at;}
    if(record.kind==='target'&&action==='recompute'){const [sources]=await db.execute("SELECT * FROM business_records WHERE owner_id=? AND kind IN ('quote','shipment')",[user.id]);d._actuals=cleanError(()=>targetProgress(d,sources));d._recomputed_at=new Date().toISOString();}
    if(record.kind==='invoice_request'){
-    if(action==='upload'){
+    if(['upload','save_invoice_draft'].includes(action)){
      if(!Array.isArray(input.invoices)||input.invoices.length<1||input.invoices.length>3)fail(400,'Upload between one and three invoices.');
      const uploaded=input.invoices.map(invoice=>({metadata:cleanError(()=>validateFields(invoice,rowSpecs.requestInvoices)),document:documentInput(invoice.document)}));
      if(uploaded.some(i=>i.metadata.currency!==d.currency||scaled(i.metadata.total)<=0n||!['application/pdf','image/png','image/jpeg'].includes(i.document.mime)))fail(400,'Invoice totals must be positive, in the request currency, with a PDF or image.');
      const numbers=uploaded.map(i=>i.metadata.bill_number);if(new Set(numbers).size!==numbers.length)fail(400,'Invoice numbers must be unique in this submission.');
      d.submitted_invoices=[];delete d.rejection_reason;
      for(const invoice of uploaded){const doc=invoice.document;const [saved]=await db.execute("INSERT INTO record_documents(record_id,user_id,name,mime,content,visibility) VALUES(?,?,?,?,?,'shared')",[id,user.id,doc.name,doc.mime,doc.content]);d.submitted_invoices.push({...invoice.metadata,document_id:saved.insertId});}
+     d._invoice_draft=action==='save_invoice_draft';
+    }
+    if(action==='submit_invoice_draft'){
+     if(!d._invoice_draft||!d.submitted_invoices?.length)fail(409,'Save an invoice draft first.');
+     for(const invoice of d.submitted_invoices){const [documents]=await db.execute('SELECT id FROM record_documents WHERE id=? AND record_id=?',[invoice.document_id,id]);if(!documents.length)fail(409,'A draft invoice document is missing.');}
+     d._invoice_draft=false;delete d.rejection_reason;
     }
     if(action==='reject'){if(typeof input.reason!=='string'||!input.reason.trim()||input.reason.length>2000)fail(400,'A rejection reason is required.');d.rejection_reason=input.reason.trim();await db.execute("INSERT INTO record_notes(record_id,user_id,message,visibility) VALUES(?,?,?,'shared')",[id,user.id,'Invoice rejection: '+d.rejection_reason]);}
     if(['approve','reject'].includes(action)){d.reviewed_by=user.name;d.reviewed_at=new Date().toISOString();}
@@ -188,13 +201,23 @@ export async function workspaceApi({req,res,url,user,pool,body,json,derive,rando
      }
     }
    }
-   if(action==='respond'){
+   if(['respond','save_rates'].includes(action)){
     const rates=cleanError(()=>validateFields({vendor_charges:input.vendor_charges},[{key:'vendor_charges',label:'Vendor rates',type:'rows:vendorCharges',required:true}]));
     if(rates.vendor_charges.some(r=>Number(r.quantity)<=0))fail(400,'Quantity must be positive.');
     if(rates.vendor_charges.some(r=>r.currency!==d.currency))fail(400,'Vendor rates must use the request currency.');d.vendor_charges=rates.vendor_charges;
     if(typeof input.vendor_note!=='string'||input.vendor_note.length>20000)fail(400,'Vendor remarks are invalid.');d.vendor_note=input.vendor_note;
+    if(input.validity_date!==undefined){const valid=cleanError(()=>validateFields({validity_date:input.validity_date},[{key:'validity_date',label:'Validity date',type:'date',required:true}]));if(valid.validity_date<today())fail(400,'Validity date cannot be in the past.');d.validity_date=valid.validity_date;}
+    if(action==='respond')d.submitted_at=new Date().toISOString();
    }
    if(record.kind==='quote'){
+    if(action==='revise'){
+     if(d._revision_id)fail(409,'A revision already exists.');
+     d._revision_id=await insert(db,'quote',{...d,revised_from_id:id,source_request_id:undefined},user);
+    }
+    if(action==='reject'&&user.role==='customer'){
+     if(typeof input.reason!=='string'||!input.reason.trim()||input.reason.length>2000)fail(400,'A rejection reason is required.');
+     d.rejection_reason=input.reason.trim();await db.execute("INSERT INTO record_notes(record_id,user_id,message,visibility) VALUES(?,?,?,'shared')",[id,user.id,'Quotation rejection: '+d.rejection_reason]);
+    }
     if(['submit','pricing','approve','send','accept'].includes(action)&&!(d.charges?.length))fail(400,'Add quotation charges first.');
     if(action==='accept'&&d.expiry_date<today())fail(409,'The quotation has expired.');
     if(action==='expire'&&d.expiry_date>=today())fail(409,'The expiry date has not passed.');
@@ -205,11 +228,13 @@ export async function workspaceApi({req,res,url,user,pool,body,json,derive,rando
     }
    }
    if(record.kind==='lead'&&action==='convert')d._converted_id=await insert(db,'opportunity',{...d,lead_id:id,probability:'25'},user);
-   if(record.kind==='rate_request'&&action==='accept'&&d.quote_id){
-    const quote=await recordById(db,d.quote_id,user,true);if(!['Draft','Renegotiate'].includes(quote.status))fail(409,'The linked quote is locked.');
+   if(record.kind==='rate_request'&&['respond','accept'].includes(action)&&d.quote_id&&!d._rates_imported){
+    const [quotes]=await db.execute("SELECT * FROM business_records WHERE id=? AND kind='quote' AND owner_id=? FOR UPDATE",[d.quote_id,record.owner_id]);
+    const quote=quotes[0];if(!quote||!['Draft','Renegotiate'].includes(quote.status))fail(409,'The linked quote is unavailable or locked.');
     if(!d.vendor_charges?.length)fail(400,'No vendor rates have been submitted.');
     if(d.currency!==quote.details.currency)fail(400,'Rate request and quote currencies must match before importing rates.');
-    quote.details.charges=[...(quote.details.charges||[]),...d.vendor_charges.map(r=>({...r,sell_rate:r.cost_rate,tax_percent:'0'}))];await save(db,quote,user,'import vendor rates');
+    const charges=[...(quote.details.charges||[]),...d.vendor_charges.map(r=>({...r,sell_rate:'0',tax_percent:'0'}))];
+    cleanError(()=>validateRecord('quote',{...quote.details,charges}));quote.details.charges=charges;await save(db,quote,user,'import vendor rates');d._rates_imported=true;
    }
    if(['shipment','service_job'].includes(record.kind)&&action==='invoice'){
     if(!d.charges?.length)fail(400,'Add revenue charges before invoicing.');

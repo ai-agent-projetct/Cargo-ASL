@@ -34,7 +34,19 @@ try{
  let rate=await create('rate_request',{title:'QA vendor request',organization_id:organization.id,quote_id:quote.id,vendor_user_id:vendor.id,due_date:'2099-12-31',transport_mode:'Sea Freight',shipment_type:'Export',cargo_type:'Full Container Load',origin:'Rotterdam',destination:'Dubai',currency:'USD'},admin);
  rate=await action(rate,'send',admin);
  await check('vendor rates reject a foreign currency instead of importing without FX',async()=>assert.equal((await request('/workspace/records/'+rate.id+'/action','POST',{version:rate.version,action:'respond',vendor_charges:[{description:'Freight',quantity:'1',cost_rate:'80',currency:'EUR'}],vendor_note:''},vendor)).status,400));
- rate=await action(rate,'respond',vendor,{vendor_charges:[{description:'Port service',quantity:'1',cost_rate:'80.00',currency:'USD'}],vendor_note:'Capacity confirmed'});
+ await check('vendor draft rates persist without submitting, and reject invalid validity dates',async()=>{
+  const draft={vendor_charges:[{description:'Port service',quantity:'1',cost_rate:'75.00',currency:'USD'}],vendor_note:'Draft capacity',validity_date:'2099-12-31'};
+  assert.equal((await request('/workspace/records/'+rate.id+'/action','POST',{...draft,version:rate.version,action:'save_rates',validity_date:'2026-02-30'},vendor)).status,400);
+  rate=await action(rate,'save_rates',vendor,draft);assert.equal(rate.status,'Pending');assert.equal(rate.details.submitted_at,undefined);
+  assert.equal((await get(rate.id,vendor)).details.vendor_charges[0].cost_rate,'75.00');assert.equal(rate.details.validity_date,'2099-12-31');
+ });
+ rate=await action(rate,'respond',vendor,{vendor_charges:[{description:'Port service',quantity:'1',cost_rate:'80.00',currency:'USD'}],vendor_note:'Capacity confirmed',validity_date:'2099-12-31'});
+ assert.ok(rate.details.submitted_at);
+ await check('vendor submission imports costs once and leaves selling prices for admin pricing',async()=>{
+  quote=await get(quote.id,admin);assert.equal(quote.details.charges.length,2);assert.equal(quote.details.charges[1].cost_rate,'80.00');assert.equal(quote.details.charges[1].sell_rate,'0');assert.equal(quote.totals.total,'210.00');
+  quote=await ok('/workspace/records/'+quote.id,'PUT',{version:quote.version,details:{...quote.details,charges:quote.details.charges.map((line,index)=>index===1?{...line,sell_rate:'80.00'}:line)}},admin);
+ });
+ assert.equal((await request('/workspace/records/'+rate.id+'/action','POST',{version:rate.version,action:'save_rates',vendor_charges:rate.details.vendor_charges,vendor_note:''},vendor)).status,403);
  await check('vendor can submit its assigned request, but cannot approve it',async()=>{
   assert.equal(rate.status,'Submitted');assert.equal((await request('/workspace/records/'+rate.id+'/action','POST',{version:rate.version,action:'accept'},vendor)).status,403);
  });
@@ -71,7 +83,7 @@ try{
   await ok('/workspace/notifications/read','POST',{},client);
   assert.ok((await ok('/workspace/snapshot','GET',undefined,client)).notifications.every(n=>n.is_read));
  });
- await check('accepted quote converts once to linked shipment',async()=>{assert.equal(shipment.details.quote_id,quote.id);assert.equal((await request('/workspace/records/'+quote.id+'/action','POST',{version:quote.version,action:'convert'},admin)).status,403);});
+ await check('accepted quote converts once to linked shipment',async()=>{assert.equal(shipment.details.quote_id,quote.id);const clientDraft=await get(shipment.id,client);assert.equal(clientDraft.status,'Draft');assert.equal(clientDraft.editable,false);assert.equal(clientDraft.details.charges[0].cost_rate,undefined);assert.equal((await request('/workspace/records/'+quote.id+'/action','POST',{version:quote.version,action:'convert'},admin)).status,403);});
  for(const name of ['book','depart','arrive','complete'])shipment=await action(shipment,name,admin);
  shipment=await action(shipment,'invoice',admin);let invoice=await get(shipment.details._invoice_id,admin);
  invoice=await action(invoice,'post',admin);
@@ -114,7 +126,7 @@ try{
   assert.equal((await request('/login','POST',{email:`extra-${suffix}@cargoasl.invalid`,password,portal:'client'})).status,401);
   assert.equal((await request('/login','POST',{email:`extra-${suffix}@cargoasl.invalid`,password:password+'new',portal:'client'})).status,200);
  });
- const inquiryDetails={title:'QA client inquiry',contact_name:'Nora Vale',email:'nora@cargoasl.invalid',address:'Aster Grove office',date:'2026-11-04',transport_mode:'Air Freight',shipment_type:'International',cargo_type:'General Cargo',origin:'Amsterdam',destination:'Dubai',origin_country:'Netherlands',destination_country:'United Arab Emirates',pickup:'Warehouse A',delivery:'Venue B',pickup_contact:'Avery',delivery_contact:'Rowan',pickup_at:'2026-11-10T09:00',delivery_at:'2026-11-12T17:30',service_type:'Priority',cargo_specification:'Exhibition stand',dangerous:false};
+ const inquiryDetails={title:'QA client inquiry',contact_name:'Nora Vale',email:'nora@cargoasl.invalid',address:'Aster Grove office',date:'2026-11-04',transport_mode:'Air Freight',shipment_type:'International',cargo_type:'Loose',origin:'Amsterdam',destination:'Dubai',origin_country:'Netherlands',destination_country:'United Arab Emirates',pickup:'Warehouse A',delivery:'Venue B',pickup_contact:'Avery',delivery_contact:'Rowan',pickup_at:'2026-11-10T09:00',delivery_at:'2026-11-12T17:30',service_type:'Priority',cargo_specification:'Exhibition stand',dangerous:false,packages:[{type:'Box',count:'2',weight:'20',weight_unit:'kg',length:'100',width:'50',height:'40',dimension_unit:'cm'}]};
  let inquiry;
  await check('client submits an inquiry with documents; identity and status are server controlled',async()=>{
   const result=await ok('/workspace/records','POST',{kind:'quote_request',status:'Accepted',owner_id:outsider.id,details:{...inquiryDetails,client_user_id:outsider.id,charges:[{cost_rate:'1'}]},documents:[{name:'specification.txt',mime:'text/plain',content:Buffer.from('Fictional cargo specification').toString('base64')}]},client);
@@ -127,16 +139,29 @@ try{
   assert.equal((await request('/workspace/records','POST',{kind:'quote_request',details:inquiryDetails,documents:[{name:'unsafe.html',mime:'text/html',content:Buffer.from('html').toString('base64')}]},client)).status,400);
   const [after]=await db.execute("SELECT COUNT(*) AS n FROM business_records WHERE kind='quote_request' AND owner_id=?",[admin.id]);assert.equal(after[0].n,before[0].n);
  });
- await check('admin prepares exactly one priced quotation linked to the client inquiry',async()=>{
-  const priced={...quote.details,title:'QA enquiry quotation',source_request_id:inquiry.id};
-  const quotation=await create('quote',priced,admin);const handled=await get(inquiry.id,admin);assert.equal(handled.status,'Quoted');assert.equal(handled.details._converted_id,quotation.id);
+ await check('admin prices an inquiry in place, preserving identity, documents and private pricing',async()=>{
+  const priced={...quote.details,title:'QA enquiry quotation',source_request_id:inquiry.id,packages:inquiry.details.packages};
+  let quotation=await create('quote',priced,admin);const handled=await get(inquiry.id,admin);assert.equal(handled.kind,'quote');assert.equal(handled.status,'Draft');assert.equal(quotation.id,inquiry.id);assert.equal(quotation.number,inquiry.number);assert.equal(quotation.documents.length,1);assert.ok(quotation.history.some(entry=>entry.action==='portal create'));
   assert.equal((await get(inquiry.id,client)).details._converted_id,undefined);
   assert.equal((await request('/workspace/records','POST',{kind:'quote',details:priced},admin)).status,409);
+  assert.deepEqual(quotation.details.packages,inquiryDetails.packages);const portal=await get(quotation.id,client);assert.equal(portal.details.charges,undefined);assert.equal(portal.totals,undefined);assert.equal(portal.documents.length,1);quotation=await ok('/workspace/records/'+quotation.id,'PUT',{version:quotation.version,details:{...quotation.details,title:'QA priced in place',source_request_id:999999}},admin);assert.equal(quotation.details.source_request_id,inquiry.id);assert.equal(quotation.details._portal_inquiry,true);
  });
- await check('client creates and edits its own courier products; booking locks further edits',async()=>{
+ await check('approval-exempt quotes publish directly while ordinary drafts remain protected',async()=>{
+  let direct=await create('quote',{...quote.details,approval_required:false},admin);
+  direct=await action(direct,'send',admin);assert.equal(direct.status,'Sent');assert.equal((await get(direct.id,client)).status,'Sent');
+  assert.equal((await request('/workspace/records/'+direct.id+'/action','POST',{version:direct.version,action:'reject'},client)).status,400);
+  direct=await action(direct,'reject',client,{reason:'QA only: revise delivery terms'});assert.equal(direct.status,'Rejected');assert.equal(direct.details.rejection_reason,'QA only: revise delivery terms');
+  direct=await action(await get(direct.id,admin),'revise',admin);const revision=await get(direct.details._revision_id,admin);
+  assert.equal(revision.status,'Draft');assert.equal(revision.details.revised_from_id,direct.id);assert.deepEqual(revision.details.charges,direct.details.charges);assert.equal(revision.details._published,undefined);
+  assert.equal((await request('/workspace/records/'+revision.id,'GET',undefined,client)).status,404);
+  assert.equal((await request('/workspace/records/'+direct.id+'/action','POST',{version:direct.version,action:'revise'},admin)).status,403);
+  let protectedQuote=await create('quote',{...quote.details,approval_required:true},admin);
+  assert.equal((await request('/workspace/records/'+protectedQuote.id+'/action','POST',{version:protectedQuote.version,action:'send'},admin)).status,403);
+ });
+ await check('saved courier is visible only to its client and rejects edits immediately',async()=>{
   let parcel=await create('courier',{title:'QA courier parcel',date:'2026-11-04',logistic_id:'QA-'+suffix,client_user_id:outsider.id,goods:[{product:'Display unit',quantity:'2',unit_price:'80.00',currency:'USD'}]},client);
-  assert.equal(parcel.details.client_user_id,client.id);assert.equal(parcel.editable,true);assert.equal((await request('/workspace/records/'+parcel.id,'GET',undefined,outsider)).status,404);
-  parcel=await ok('/workspace/records/'+parcel.id,'PUT',{version:parcel.version,details:{...parcel.details,logistic_partner:'Blue Horizon Courier',client_user_id:outsider.id}},client);
+  assert.equal(parcel.details.client_user_id,client.id);assert.equal(parcel.editable,false);assert.equal((await request('/workspace/records/'+parcel.id,'GET',undefined,outsider)).status,404);
+  assert.equal((await request('/workspace/records/'+parcel.id,'PUT',{version:parcel.version,details:{...parcel.details,logistic_partner:'Blue Horizon Courier',client_user_id:outsider.id}},client)).status,403);
   assert.equal(parcel.details.client_user_id,client.id);parcel=await action(await get(parcel.id,admin),'book',admin);
   assert.equal((await request('/workspace/records/'+parcel.id,'PUT',{version:parcel.version,details:parcel.details},client)).status,403);
  });
@@ -149,7 +174,12 @@ try{
   assert.equal((await request('/workspace/records/'+invoiceRequest.id+'/action','POST',{...invalid,version:invoiceRequest.version,action:'upload'},vendor)).status,400);
   assert.equal((await get(invoiceRequest.id,admin)).documents.length,0);
  });
- invoiceRequest=await action(invoiceRequest,'upload',vendor,invoiceUpload);
+ await check('vendor saves an invoice draft and submits its original file without reuploading',async()=>{
+  invoiceRequest=await action(invoiceRequest,'save_invoice_draft',vendor,invoiceUpload);assert.equal(invoiceRequest.status,'Pending Vendor Bill Upload');assert.equal(invoiceRequest.details._invoice_draft,true);const originalId=invoiceRequest.details.submitted_invoices[0].document_id;
+  assert.equal((await request('/workspace/records/'+invoiceRequest.id+'/action','POST',{version:invoiceRequest.version,action:'approve'},admin)).status,403);
+  assert.equal((await request('/workspace/records/'+invoiceRequest.id+'/action','POST',{version:invoiceRequest.version,action:'submit_invoice_draft'},client)).status,404);
+  invoiceRequest=await action(invoiceRequest,'submit_invoice_draft',vendor);assert.equal(invoiceRequest.details._invoice_draft,false);assert.equal(invoiceRequest.documents.length,1);assert.equal(invoiceRequest.details.submitted_invoices[0].document_id,originalId);
+ });
  await check('invoice rejection requires a reason visible to the vendor',async()=>{
   assert.equal(invoiceRequest.status,'Vendor Invoice Upload - Approval Pending');
   assert.equal((await request('/workspace/records/'+invoiceRequest.id+'/action','POST',{version:invoiceRequest.version,action:'reject'},admin)).status,400);

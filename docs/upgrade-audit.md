@@ -1,43 +1,55 @@
 # Cargo ASL upgrade comparison — 4 November 2026
 
-REA 6.5.0 is connected to Codex and installed globally. The current source ERP, vendor and customer logins were exercised successfully through isolated browsers. Source inspection was read-only: no source quotation, shipment, invoice, target, email or payment was submitted or changed. Credentials and raw source captures are excluded from this repository.
+REA 6.5.0 is installed globally and connected to Codex. All three supplied source accounts were exercised. After the user authorized adding sample data, clearly labelled staging fixtures were created under `CARGO-ASL-QA-20261104`. Existing source transactions were not edited. Credentials, access tokens, source captures and the fixture ledger remain private under `.local/`.
 
-## Inspected
+## Source checks completed
 
-- ERP quotation dashboard and Sales & CRM navigation; the unsaved sales-target form, its six parameters and monthly-line controls.
-- A saved pro forma invoice, including currency, exchange-rate lines, totals, grouping controls, print/email/customer-preview controls and history.
-- House-shipment list and saved detail, its operational states, cost/revenue summaries, documents and invoice-request controls.
-- The unsaved vendor invoice-request form and its four visible states, invoice metadata and requested-charge tabs.
-- Vendor dashboard and invoice-request list. The supplied vendor account has no assigned requests.
-- All seven customer record sections, the complete unsaved quote-request form, and courier creation with product and document tables. The supplied customer account's record lists are empty.
-
-## Implemented and tested in this update
-
-| Confirmed Cargo ASL gap | Result | Verification |
+| Case | Observed result | Evidence method |
 |---|---|---|
-| Customers could not request quotations | Inquiry form, documents in the same transaction, account-manager routing, protected identity, linked admin pricing and duplicate prevention | Unit, API, real browser |
-| Customers could not create courier records | Logistic identifiers, partner/reference, shipper/consignee, product quantities/UOM, PO/invoice, HS code, price/currency, lot and date details; own draft editing | Unit, API, real browser |
-| Vendor invoice-request workflow absent | Pending upload → approval pending → approved/rejected; rejection reasons and resubmission; original-file retention; draft supplier bills on approval | Unit, API; upload dialog checked in Chrome |
-| Inquiries lost shipping details during pricing | Pickup/delivery contacts and times, cargo specifications, priority and special considerations remain available on quotations and shipments | Shared validation and conversion checks |
-| Portal filters absent | Transport, cargo and shipment filters; pending/overdue invoice filters; saved filters retain these selections | DOM/browser checks and code review |
-| Courier and emissions access incomplete | Courier navigation/report data and a direct CO₂ report link | Browser navigation and report tests |
-| Sales target model too limited | Date ranges, six parameters, reporting-manager/incentive metadata, monthly target lines, regeneration, actual-value recomputation and report | Unit and live workflow checks |
-| New interface lacked real-browser acceptance | Six repeatable REA scenarios, including cross-role pricing/acceptance and a mobile viewport; wired into CI | Local Chrome passed |
+| Customer inquiry | Saved, reloaded, listed in Inquiry Log and opened in ERP; packages and dimensions persisted | REA Chrome and authenticated reads |
+| Customer courier | Product, quantity, unit price, currency, lot and dates persisted; saved detail has no editing controls | REA Chrome |
+| Vendor rates | QA request appeared for its assigned vendor; draft saved/reloaded, then submitted with a validity date | REA Chrome and authenticated reads |
+| Automatic pricing intake | Vendor submission generated a quote cost charge. Selling price remained zero for admin pricing | Authenticated model reads |
+| Publication | Explicit no-email publication succeeded; customer saw the quote under Pending Approval | Authenticated business action and customer form reads |
+| Customer rejection and revision | Reason saved; source revision action created a new Draft with copied charge lines. Admin pricing verified USD 25 cost / USD 40 sale, followed by no-email publication | Customer form POST and guarded business actions |
+| Created shipment | Synthetic shipment stayed in Created; customer Summary included it before booking | Authenticated create and customer form reads |
+| Vendor invoice | Assigned QA request appeared; a generated synthetic PDF and manual USD 25 line saved as a draft, then submitted to Approval Pending | Authenticated vendor form POSTs and admin reads |
+| OCR fallback | Source reported that its OCR service could not be reached; attachment retention and manual submission still worked | Actual source response |
 
-Approval of a vendor invoice produces a **draft** bill for tax/document review. It does not silently post the ledger or record a payment. The local accounting effects are tested; exact equivalence to every source approval/posting rule remains unverified.
+The source invoice remains awaiting review. Its form confirms that approval creates a **draft** bill. Source invoice approval/rejection, ledger posting, payments and external synchronization were not executed. Source shipment booking was not performed. One customer-browser follow-up timed out; authenticated customer reads established the later portal results and are identified separately above.
 
-## Confirmed remaining gaps and unknowns
+## Implemented and tested in Cargo ASL
 
-| Area | Remaining work or evidence needed |
+| Confirmed gap | Result | Verification |
+|---|---|---|
+| Inquiry pricing changed identity | New inquiries become quotations in place, preserving ID, RFQ reference, documents, followers and history. Unpublished charge details stay private. Older linked records are preserved | API, Chrome |
+| Inquiry packages missing | Package counts, dimensions/units, gross weight/unit, commodity, HS code, hazardous flag and description | Unit, API, Chrome |
+| Cargo choices ignored transport mode | Observed sea, air, road and rail choices in shared UI/server validation; legacy General Cargo remains supported | Unit, DOM, Chrome |
+| Currency options incomplete | SGD available alongside USD/AED/INR/EUR/GBP | Unit, Chrome vendor rates |
+| Saved courier remained client-editable | Client records are read-only immediately after saving; internal owner editing remains subject to status | Unit, API, Chrome |
+| Vendor draft and validity absent | Save draft, reload, amend and submit rates; server timestamp, validity validation and role/status protection | Unit, API, Chrome |
+| Vendor costs needed manual import | Submission imports cost charges into an owned unlocked quote once, with zero selling price for admin pricing. Later acceptance does not duplicate charges | API |
+| Approval was always mandatory | Owning admins may explicitly disable internal approval for direct publication; existing quotes default to requiring approval | Unit, API, DOM |
+| Quote rejection/revision incomplete | Customer rejection reason; owner-only new draft revision with copied details, original link and duplicate prevention | Unit, API |
+| Created jobs hidden | Assigned clients can read their Created/Draft jobs without editing or seeing costs | Unit, API |
+| Vendor invoice draft absent | Save a complete invoice draft, retain originals, submit without reupload; reject/resubmit/approve into draft bills | Unit, API; actual Chrome upload dialog |
+| Sales targets too limited | Six parameters, date ranges, monthly target lines, regeneration, recomputed actuals, reporting-manager/incentive metadata | Unit, API |
+| Portal navigation/filter gaps | Route filters, saved filters, invoice pending/overdue filters, courier and CO2 access | Unit, API, Chrome |
+
+Latest local verification: **70 automated tests**, **38 live workflow checks**, **12 named defensive integration cases**, **all three demo logins**, and **8 actual Chrome scenarios** passed. Tests use fictional local records and remove their temporary fixtures. Source QA records remain available for review.
+
+## Remaining parity and deployment work
+
+| Area | Remaining differences or unverified behavior |
 |---|---|
-| Master Shipment (Consol) | Source has a separate module; a full consolidation/linking workflow has not been implemented or audited. |
-| Shipment lifecycle | Source also shows Confirmed, HAWB Generated and Job Close. Cargo ASL's simpler booking/transit/completion/invoicing states do not reproduce all of these controls. |
-| Accounting | Debit notes, every pro forma approval rule, charge grouping, branded PDF/email attachments and customer-preview behavior are not fully reproduced. |
-| Documents | Source BL upload and DOCX report/template generation are not implemented as equivalent workflows. |
-| Integrations | Source courier form exposes Cargosflow synchronization. Its API contract, endpoint and credentials are unavailable; no fake synchronization is presented as working. External tracking/onboarding integrations remain unverified. |
-| Permissions | Source company, group and team access rules have not been fully established. Cargo ASL uses its documented owner/assignee/portal permissions. |
-| Targets | Source monthly distribution and incentive formulas were not exercised. Cargo ASL explicitly uses equal monthly allocation with editable lines and actuals from accessible records. This is not a verified copy of the source formula. |
-| Detailed portals | Empty source vendor/customer lists prevent comparison of saved-record actions. Populated source test records or a walkthrough are needed. Local behavior is independently tested. |
-| Deployment | A cloud MySQL database, deployment access and operational configuration are still required for a client-shareable hosted app. SMTP delivery needs provider credentials. |
+| Consolidation and operational states | Master Shipment linking; Confirmed, HAWB/BL/Nomination generation and Job Close controls remain incomplete |
+| Advanced quotations | Multi-carrier/multimodal options, vendor counteroffers/renegotiation rounds, minimum charges, measurement-basis formulas, line inclusion/grouping and all conditional incoterm rules need implementation/comparison |
+| Customer quote actions | Source Accept & Sign captures a signature; Cargo ASL currently records acceptance without an equivalent signature workflow. Source inquiry cancellation/reason behavior is not fully exercised |
+| Vendor invoice detail | Source offers per-charge matching, FX and manual/OCR extraction, optional header fields, file preview/deletion and partial drafts. Cargo ASL currently saves complete metadata/document drafts and invoice totals; these detailed functions are not equivalent |
+| Documents/accounting | Debit notes, every pro forma approval rule, branded PDF/email attachments, BL upload and DOCX template generation remain incomplete |
+| Integrations | Cargosflow synchronization, live carrier tracking, onboarding and working OCR require verified provider contracts/configuration. No simulated provider success is presented |
+| Permissions and scale | Full company/group/team rules need comparison. Snapshot/report aggregation remains capped at 5,000 accessible records |
+| Targets | Local monthly distribution is explicitly equal allocation; source distribution and incentive formulas remain unverified |
+| Hosting | Cloud MySQL and authenticated deployment are still needed for a client-shareable hosted app. SMTP needs provider configuration; backup recovery and production load testing remain outstanding |
 
-The application is functional for the tested workflows, but it must not be described as an exact, complete clone of the entire source ERP. The previous distinct Cargo ASL interface and fictional demonstration data are retained. Source business names, transactions and passwords were not copied into application fixtures.
+This is a functional, tested implementation of the listed workflows. It is **not yet an exact, complete clone** of the entire source ERP. Cargo ASL retains its distinct interface and fictional demo organizations.

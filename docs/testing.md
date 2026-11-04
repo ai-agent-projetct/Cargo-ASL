@@ -2,7 +2,7 @@
 
 Verified locally on 4 November 2026 using Node 24, MySQL, Chrome 156 and REA 6.5.0. These checks establish implemented behavior, not complete reference-ERP equivalence.
 
-Latest results: **63 automated tests passed**, **34 live workflow checks passed**, the existing integration suite passed (including 12 named defensive cases), and **all three demo portal checks passed**. **Six real-browser scenarios passed**, including a mobile viewport. Automated test totals include emulated-DOM parent/subtests; they are distinct from the six browser scenarios.
+Latest results: **70 automated tests passed**, **38 live workflow checks passed**, the existing integration suite passed (including 12 named defensive cases), and **all three demo portal checks passed**. **Eight real-browser scenarios passed**, including a mobile viewport. Automated test totals include emulated-DOM parent/subtests; they are distinct from the eight browser scenarios.
 
 ## Run
 
@@ -30,15 +30,16 @@ API suites create temporary users and business records and remove them in `final
 - Live MySQL authentication, persisted drafts, audit creation, content/body limits, inactive/expired sessions, owner and portal isolation, cross-origin rejection and logout.
 - All three demo logins, correct roles, wrong-portal rejection and restricted endpoints.
 - Live cross-role CRM → vendor rates → approved quote → client acceptance → shipment → posted invoice → credit/payment, plus service-quote conversion, service invoicing, pro forma conversion, carrier bookings, supplier payments, configuration, assigned activities, followers/notifications and account provisioning/password reset.
-- Client-created inquiries and courier products; identity spoofing prevention, invalid-attachment rollback, inquiry-to-quote linking and duplicate-preparation rejection.
-- Vendor invoice upload validation, rejection reasons, resubmission, approval, attachment copying and draft-bill creation without automatic ledger posting.
+- Client-created inquiries and courier products; identity spoofing prevention, invalid-attachment rollback, identity-preserving inquiry pricing, protected unpublished prices, document/history retention and duplicate-preparation rejection.
+- Vendor rate draft saving, validity dates, SGD, automatic cost-only import and duplicate-import prevention; direct publication exemptions, quote rejection reasons and owner-only revisions.
+- Vendor invoice draft saving and submission without reuploading, upload validation, rejection reasons, resubmission, approval, attachment copying and draft-bill creation without automatic ledger posting.
 - Monthly sales-target generation and recomputation, including agent/date/route/currency isolation, exact allocation and all six metrics.
-- Real Chrome: client inquiry, client courier, admin quotation preparation/approval/publication, client acceptance, vendor upload dialog and mobile courier navigation. Persisted records and customer cost hiding are checked through the API after browser actions.
+- Real Chrome: client inquiry with package dimensions, client courier, admin quotation preparation/approval/publication, client acceptance, vendor rate draft/submission, vendor upload dialog and mobile courier navigation. Persisted records and customer cost hiding are checked through the API after browser actions.
 
 ## Acceptance limits
 
 Browser file selection/upload is not exercised by REA's current scenario action contract; document persistence and invoice upload are covered by API tests, and the real-browser check opens the actual upload form. SMTP delivery is tested with a stub, not a configured provider. No cloud deployment, load test, backup recovery test, full source permissions comparison or complete feature-parity audit is claimed.
 
-The source vendor account had no assigned rate requests and the source client account's seven record pages were empty. Their detailed workflows could not be established from those accounts. Local implemented flows therefore require comparison with populated source test records before exact equivalence can be accepted.
+With the user's authorization, labelled source QA inquiries, a courier, a vendor rate, a revised quotation, a Created shipment and a vendor invoice request were added. Browser evidence verifies inquiry/courier persistence and rate save/submit. Authenticated application API/form checks verify the cost import, no-email publication, customer rejection, revision, shipment Summary visibility, PDF draft upload and invoice submission to approval-pending. Source OCR returned an unavailable-service error; manual entry worked. Source invoice approval and all remaining ERP modules are not covered by these checks. See the [comparison and remaining gaps](upgrade-audit.md).
 
 See `scripts/verify-workflow.mjs` for individual assertions and the README for remaining operational requirements.

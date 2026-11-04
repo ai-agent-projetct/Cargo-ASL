@@ -11,7 +11,7 @@ async function harness(role='erp',authenticated=true){
  dom.window.HTMLDialogElement.prototype.showModal=function(){this.open=true;};
  for(const name of ['window','document','location','localStorage','FormData','FileReader','File','Blob'])globalThis[name]=name==='window'?dom.window:dom.window[name];
  const user={id:1,name:'QA User',role,email:'qa@cargoasl.invalid'};
- const records=role==='vendor'?[{id:9,kind:'rate_request',owner_id:7,status:'Pending',version:1,number:'RR-000009',details:{title:'QA request',currency:'USD',vendor_user_id:1},actions:['respond'],editable:false,notes:[],documents:[],history:[],payments:[],followers:[],following:false}]:[];
+ const records=role==='vendor'?[{id:9,kind:'rate_request',owner_id:7,status:'Pending',version:1,number:'RR-000009',details:{title:'QA request',currency:'USD',vendor_user_id:1},actions:['respond','save_rates'],editable:false,notes:[],documents:[],history:[],payments:[],followers:[],following:false}]:[];
  const requests=[];
  globalThis.fetch=async(path,options={})=>{
   const input=options.body?JSON.parse(options.body):null;requests.push({path,method:options.method||'GET',input});
@@ -20,7 +20,7 @@ async function harness(role='erp',authenticated=true){
   if(path==='/api/login'){if(input.password==='wrong')return result({error:'Invalid email or password.'},401);authenticated=true;return result(user);}
   if(path==='/api/workspace/snapshot')return result({records,users:[{...user,active:1},{id:2,name:'QA Client',email:'client@cargoasl.invalid',role:'customer',active:1}],ledger:[],notifications:[],mail:[],smtpConfigured:false});
   if(path==='/api/workspace/records'&&options.method==='POST'){const record={id:20,kind:input.kind,details:input.details,owner_id:1,status:'Draft',version:1,number:'ORG-000020',actions:[],editable:true,notes:[],documents:[],history:[],payments:[],followers:[]};records.push(record);return result({id:20},201);}
-  if(path==='/api/workspace/records/9/action'){records[0].details.vendor_charges=input.vendor_charges;records[0].status='Submitted';records[0].actions=[];return result({id:9});}
+  if(path==='/api/workspace/records/9/action'){records[0].details.vendor_charges=input.vendor_charges;records[0].details.validity_date=input.validity_date;records[0].status=input.action==='save_rates'?'Pending':'Submitted';records[0].actions=input.action==='save_rates'?['respond','save_rates']:[];return result({id:9});}
   const matched=/^\/api\/workspace\/records\/(\d+)$/.exec(path);if(matched)return result(records.find(record=>record.id===Number(matched[1])));
   return result({error:'Unhandled mocked request: '+path},404);
  };
@@ -58,8 +58,30 @@ test('workspace form and portal handlers in an emulated DOM',async t=>{
   document.querySelector('#action-dialog').dispatchEvent(new window.Event('submit',{cancelable:true}));await waitFor(()=>requests.some(r=>r.path.endsWith('/action')));
   const saved=requests.find(r=>r.path.endsWith('/action')).input;assert.equal(saved.vendor_charges.length,2);assert.equal(saved.vendor_charges[0].cost_rate,'80');assert.equal(saved.vendor_charges[1].description,'Terminal');
  });
+ await t.test('vendor draft dialog preserves its validity date while adding lines',async()=>{
+  const {document,requests}=await harness('vendor');document.querySelector('[data-open="9"]').click();await waitFor(()=>document.querySelector('[data-transition=save_rates]'));document.querySelector('[data-transition=save_rates]').click();
+  document.querySelector('[name=validity_date]').value='2099-12-20';document.querySelector('dialog [data-add=vendor_charges]').click();
+  document.querySelector('[name="vendor_charges.0.description"]').value='Draft documentation';document.querySelector('[name="vendor_charges.0.cost_rate"]').value='25';
+  assert.equal(document.querySelector('[name=validity_date]').value,'2099-12-20');document.querySelector('dialog [data-add=vendor_charges]').click();document.querySelector('dialog [data-remove="vendor_charges:1"]').click();
+  assert.match(document.querySelector('dialog h2').textContent,/Save vendor draft/);
+  document.querySelector('#action-dialog').dispatchEvent(new window.Event('submit',{cancelable:true}));await waitFor(()=>requests.some(r=>r.path.endsWith('/action')));
+  const saved=requests.find(r=>r.path.endsWith('/action')).input;assert.equal(saved.action,'save_rates');assert.equal(saved.validity_date,'2099-12-20');assert.equal(saved.vendor_charges[0].cost_rate,'25');
+ });
+ await t.test('editing older quotations keeps approval enabled when the policy field is absent',async()=>{
+  const {document,records}=await harness();records.push({id:27,kind:'quote',number:'QUO-000027',status:'Draft',details:{title:'Legacy quote'},actions:[],editable:true,notes:[],documents:[],history:[],payments:[],followers:[]});
+  document.querySelector('[data-action=refresh]').click();await waitFor(()=>document.querySelector('[data-open="27"]'));await new Promise(resolve=>setImmediate(resolve));document.querySelector('[data-nav=quote]').click();document.querySelector('[data-open="27"]').click();await waitFor(()=>document.querySelector('[data-action=edit]'));document.querySelector('[data-action=edit]').click();assert.equal(document.querySelector('[name=approval_required]').checked,true);
+ });
  await t.test('email outbox clearly reports missing configuration',async()=>{
   const {document}=await harness();document.querySelector('[data-nav=mail]').click();assert.match(document.body.textContent,/Delivery requires SMTP_HOST/);assert.match(document.querySelector('h1').textContent,/Email outbox/);
+ });
+ await t.test('changing transport filters cargo choices and preserves inquiry dimensions',async()=>{
+  const {document}=await harness('customer');document.querySelector('[data-nav=quote_request]').click();document.querySelector('[data-action=create]').click();
+  document.querySelector('[name=title]').value='Retain QA inquiry';document.querySelector('[data-add=packages]').click();
+  document.querySelector('[name="packages.0.type"]').value='Box';document.querySelector('[name="packages.0.length"]').value='100';
+  const mode=document.querySelector('[name=transport_mode]');mode.value='Air Freight';mode.dispatchEvent(new window.Event('change'));
+  assert.equal(document.querySelector('[name=title]').value,'Retain QA inquiry');assert.equal(document.querySelector('[name="packages.0.length"]').value,'100');
+  assert.deepEqual([...document.querySelector('[name=cargo_type]').options].map(o=>o.value),['','Loose','Courier','ULD','UNA']);
+  assert.equal(document.querySelector('[name=cargo_type]').value,'Loose');
  });
  await t.test('client can open inquiry and courier forms without admin identity controls',async()=>{
   const {document,requests}=await harness('customer');document.querySelector('[data-nav=quote]').click();document.querySelector('[data-action=request-quote]').click();await new Promise(resolve=>setImmediate(resolve));
