@@ -36,7 +36,7 @@ The source invoice remains awaiting review. Its form confirms that approval crea
 | Sales targets too limited | Six parameters, date ranges, monthly target lines, regeneration, recomputed actuals, reporting-manager/incentive metadata | Unit, API |
 | Portal navigation/filter gaps | Route filters, saved filters, invoice pending/overdue filters, courier and CO2 access | Unit, API, Chrome |
 
-Latest local verification (5 November): **96 automated tests**, **71 live workflow checks**, **12 named defensive integration cases**, **all three demo logins**, and **25 actual Chrome scenarios** passed. Both requested land/sea and land/sea/train journeys reached paid invoices and balanced ledgers; see [the multimodal report](multimodal-testing.md). Tests use fictional local records and remove their temporary fixtures. Source QA records remain available for review.
+Latest local verification (5 November): **97 automated tests**, **71 live workflow checks**, **12 named defensive integration cases**, **all three demo logins**, and **25 actual Chrome scenarios** passed. Both requested land/sea and land/sea/train journeys reached paid invoices and balanced ledgers; see [the multimodal report](multimodal-testing.md). Tests use fictional local records and remove their temporary fixtures. Source QA records remain available for review.
 
 ## Remaining parity and deployment work
 

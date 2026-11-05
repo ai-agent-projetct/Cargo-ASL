@@ -49,6 +49,10 @@ test('workspace form and portal handlers in an emulated DOM',async t=>{
   document.querySelector('[data-open="31"]').click();await waitFor(()=>document.querySelector('[data-leg-task="carrier_booking:RAIL"]'));document.querySelector('[data-leg-task="carrier_booking:RAIL"]').click();assert.equal(document.querySelector('[name=leg_id]').value,'RAIL');assert.equal(document.querySelector('[name=shipment_id]').value,'31');assert.equal(document.querySelector('[name=carrier]').value,'Juniper Rail');
   document.querySelector('#record-form').dispatchEvent(new window.Event('submit',{cancelable:true}));await waitFor(()=>requests.some(r=>r.method==='POST'&&r.path==='/api/workspace/records'));assert.equal(requests.find(r=>r.method==='POST'&&r.path==='/api/workspace/records').input.details.leg_id,'RAIL');
  });
+ await t.test('paid invoice shows completed journey progress from its linked shipment',async()=>{
+  const {document,records}=await harness('customer');const common={actions:[],editable:false,notes:[],documents:[],history:[],payments:[],followers:[]};records.push({...common,id:40,kind:'shipment',status:'Invoiced',details:{title:'Completed journey',multimodal:true,legs:landSeaLegs,_leg_progress:{ROAD:{state:'Completed'},SEA:{state:'Completed'}}}},{...common,id:41,kind:'invoice',status:'Paid',details:{title:'Settled journey invoice',shipment_id:40,multimodal:true,legs:landSeaLegs}});
+  document.querySelector('[data-action=refresh]').click();await waitFor(()=>document.querySelector('[data-open="40"]'));await new Promise(resolve=>setImmediate(resolve));document.querySelector('[data-nav=invoice]').click();document.querySelector('[data-open="41"]').click();await waitFor(()=>document.querySelector('.journey-summary'));assert.deepEqual([...document.querySelectorAll('.journey-summary .pill')].map(e=>e.textContent),['Completed','Completed']);
+ });
  await t.test('login failure is displayed; successful login uses the selected portal',async()=>{
   const {document,requests}=await harness('erp',false);
   document.querySelector('[name=email]').value='qa@cargoasl.invalid';document.querySelector('[name=password]').value='wrong';

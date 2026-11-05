@@ -28,7 +28,7 @@ Sign in locally, open **House Shipments**, and search for either demo name. Each
 
 | Suite | Result | Scope |
 |---|---:|---|
-| `npm test` | 96 passed | Shared validation, exact financial calculations, authorization, transitions, reports and emulated-DOM form handlers. Includes 24 focused multimodal tests and 2 new DOM cases |
+| `npm test` | 97 passed | Shared validation, exact financial calculations, authorization, transitions, reports and emulated-DOM form handlers. Includes 24 focused multimodal tests and 3 new DOM cases |
 | `npm run test:multimodal` | 33 checks passed | Two independent journeys against real Node/MySQL APIs, with separate assigned vendors and customer isolation |
 | `npm run test:workflow` | 38 checks passed | Existing CRM, quotation, service-job, shipping, accounting, portal and target regressions |
 | `npm run test:integration` | Passed, including 12 named defensive cases | Authentication, persistence, payload boundaries, private files, inactive/expired sessions and role restrictions |

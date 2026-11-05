@@ -2,7 +2,7 @@
 
 Verified locally on 5 November 2026 using Node 24, MySQL, Chrome 156 and REA 6.5.0. These checks establish implemented behavior, not complete reference-ERP equivalence.
 
-Latest results: **96 automated tests passed**, **71 live workflow checks passed** (38 general and 33 multimodal), the existing integration suite passed (including 12 named defensive cases), and **all three demo portal checks passed**. **25 real-browser scenarios passed** (8 general and 17 multimodal), including a mobile viewport. Automated test totals include emulated-DOM parent/subtests; they are distinct from the 25 browser scenarios.
+Latest results: **97 automated tests passed**, **71 live workflow checks passed** (38 general and 33 multimodal), the existing integration suite passed (including 12 named defensive cases), and **all three demo portal checks passed**. **25 real-browser scenarios passed** (8 general and 17 multimodal), including a mobile viewport. Automated test totals include emulated-DOM parent/subtests; they are distinct from the 25 browser scenarios.
 
 ## Run
 

@@ -64,9 +64,9 @@ try{
    ]);scenarios++;const visible=(await snapshot('client')).records.find(r=>r.id===shipment.id);assert.equal(visible.details._leg_progress[leg.id].state,'Completed');assert.ok(visible.details.charges.every(c=>c.cost_rate===undefined));
   }
   shipment=await adminApi('/workspace/records/'+shipment.id);assert.equal(shipment.status,'Completed');
-  await scenario(journey.key+'-invoice-payments','admin',[
+  const financialView=await scenario(journey.key+'-invoice-payments','admin',[
    click('shipments','[data-nav=shipment]'),click('shipment',`[data-open="${shipment.id}"]`),wait('invoice-visible','[data-transition=invoice]'),click('invoice','[data-transition=invoice]'),confirm('create-invoice'),{step_id:'open-invoice',action:'click',locator:{kind:'role',role:'button',name:'Open invoice'},timeout_ms:15000},wait('post-visible','[data-transition=post]'),click('post','[data-transition=post]'),confirm('confirm-post'),wait('pay-visible','[data-transition=pay]'),click('deposit','[data-transition=pay]'),field('deposit-amount','amount','100.00'),field('deposit-reference','reference','QA deposit'),confirm('confirm-deposit'),hidden('deposit-saved','dialog'),click('balance','[data-transition=pay]'),field('balance-amount','amount',journey.key==='land-sea'?'551.00':'866.00'),field('balance-reference','reference','QA final settlement'),confirm('confirm-balance'),hidden('invoice-paid','dialog')
-  ]);scenarios++;shipment=await adminApi('/workspace/records/'+shipment.id);const invoice=await adminApi('/workspace/records/'+shipment.details._invoice_id);assert.equal(invoice.status,'Paid');assert.equal(invoice.totals.total,journey.total);assert.deepEqual(invoice.details.legs,journey.legs);
+  ]);scenarios++;shipment=await adminApi('/workspace/records/'+shipment.id);const invoice=await adminApi('/workspace/records/'+shipment.details._invoice_id);assert.equal(invoice.status,'Paid');assert.equal(invoice.totals.total,journey.total);assert.deepEqual(invoice.details.legs,journey.legs);assert.equal((financialView.steps.at(-1).artifacts.accessibility.value.text.match(/Completed/g)||[]).length,journey.legs.length);
  }
  console.log('PASS: '+scenarios+' actual Chrome journey scenarios. Evidence: '+directory);
 }finally{
