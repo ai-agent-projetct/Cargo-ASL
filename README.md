@@ -55,6 +55,8 @@ The API suites require the app and a development MySQL database; temporary fixtu
 
 ## Deployment and acceptance
 
+The [5 November freight QA audit](docs/qa-audit-report.md) covers all 24 requested shipment scenarios, the three portals, financial reconciliation and a separate DP World staging comparison. It records 9 FAIL and 15 PARTIAL scenarios and identifies missing workflows and reproduced defects. Read this report before treating the workspace as production-ready; existing passing regression tests do not establish complete freight functionality.
+
 Never commit `.env`, `.local`, credentials or MySQL data. Vercel configuration is prepared, but a cloud MySQL database and authenticated deployment are still required. See [deployment notes](docs/vercel-deployment.md).
 
 Eight real-browser scenarios now cover client inquiry/dimensions and courier creation, admin pricing/publication, client acceptance, vendor rate draft/submission, the vendor invoice-upload dialog and mobile navigation. They do not establish full source parity. Source company/group permissions, all mode-specific rules, document templates and external carrier/onboarding integrations remain unverified. Tracking and emissions currently use manually entered records; actual email delivery requires SMTP configuration. The workspace loads up to 5,000 accessible records and warns if the limit is reached; larger deployments need server pagination and complete report aggregation. Public deployment also needs shared rate-limit enforcement, backups and operational acceptance. See the [upgrade comparison](docs/upgrade-audit.md) for confirmed remaining gaps.
