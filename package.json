@@ -16,7 +16,10 @@
     "test:portals": "node scripts/verify-portals.mjs",
     "db:migrate": "node scripts/migrate-workspace.mjs",
     "test:workflow": "node scripts/verify-workflow.mjs",
+    "test:multimodal": "node scripts/verify-multimodal.mjs",
+    "demo:journeys": "node scripts/verify-multimodal.mjs --demo",
     "test:browser": "node scripts/verify-browser.mjs",
+    "test:browser:journeys": "node scripts/verify-journey-browser.mjs",
     "demo:workspace": "node scripts/seed-workspace.mjs"
   },
   "dependencies": {

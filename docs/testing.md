@@ -1,8 +1,8 @@
 # Cargo ASL testing
 
-Verified locally on 4 November 2026 using Node 24, MySQL, Chrome 156 and REA 6.5.0. These checks establish implemented behavior, not complete reference-ERP equivalence.
+Verified locally on 5 November 2026 using Node 24, MySQL, Chrome 156 and REA 6.5.0. These checks establish implemented behavior, not complete reference-ERP equivalence.
 
-Latest results: **70 automated tests passed**, **38 live workflow checks passed**, the existing integration suite passed (including 12 named defensive cases), and **all three demo portal checks passed**. **Eight real-browser scenarios passed**, including a mobile viewport. Automated test totals include emulated-DOM parent/subtests; they are distinct from the eight browser scenarios.
+Latest results: **96 automated tests passed**, **71 live workflow checks passed** (38 general and 33 multimodal), the existing integration suite passed (including 12 named defensive cases), and **all three demo portal checks passed**. **25 real-browser scenarios passed** (8 general and 17 multimodal), including a mobile viewport. Automated test totals include emulated-DOM parent/subtests; they are distinct from the 25 browser scenarios.
 
 ## Run
 
@@ -13,10 +13,11 @@ npm test
 npm run test:integration
 npm run test:portals
 npm run test:workflow
+npm run test:multimodal
 npm run demo:workspace
 ```
 
-For browser acceptance, set `REA_CLI` to the installed `rea-agents/scripts/rea.mjs` absolute path and `BROWSER_EXECUTABLE` to Chrome, then run `npm run test:browser`. The default Chrome path is for Windows; CI sets the Linux executable explicitly. Scenario JSON, redacted evidence and screenshots are saved under `.local/browser-tests/` and excluded from Git.
+For browser acceptance, set `REA_CLI` to the installed `rea-agents/scripts/rea.mjs` absolute path and `BROWSER_EXECUTABLE` to Chrome, then run `npm run test:browser` and `npm run test:browser:journeys`. The default Chrome path is for Windows; CI sets the Linux executable explicitly. Scenario JSON, redacted evidence and screenshots are saved under `.local/browser-tests/` and excluded from Git.
 
 API suites create temporary users and business records and remove them in `finally`. Use a development database. Demo credentials are generated in `.local/portal-accounts.json` and `.local/portal-logins.txt`, which must remain private.
 
@@ -35,6 +36,10 @@ API suites create temporary users and business records and remove them in `final
 - Vendor invoice draft saving and submission without reuploading, upload validation, rejection reasons, resubmission, approval, attachment copying and draft-bill creation without automatic ledger posting.
 - Monthly sales-target generation and recomputation, including agent/date/route/currency isolation, exact allocation and all six metrics.
 - Real Chrome: client inquiry with package dimensions, client courier, admin quotation preparation/approval/publication, client acceptance, vendor rate draft/submission, vendor upload dialog and mobile courier navigation. Persisted records and customer cost hiding are checked through the API after browser actions.
+
+## Multimodal journeys
+
+The dedicated [multimodal test report](multimodal-testing.md) covers both requested combinations from inquiry through vendor rates, approval, bookings, ordered leg handoffs, supplier bills, customer invoices, payments and balanced ledger entries. The new unit tests cover validation and transition boundaries; browser checks cover the actual forms and buttons. `npm run demo:journeys` retains two paid fictional examples under the existing demo accounts.
 
 ## Acceptance limits
 

@@ -53,6 +53,7 @@ jobs:
       - run: npm run test:integration
       - run: npm run test:portals
       - run: npm run test:workflow
+      - run: npm run test:multimodal
       - run: npm run demo:workspace
       - run: npm run demo:workspace
       - name: Install pinned REA browser-test CLI
@@ -63,3 +64,4 @@ jobs:
         run: |
           export REA_CLI="$(npm root -g)/rea-agents/scripts/rea.mjs"
           npm run test:browser
+          npm run test:browser:journeys

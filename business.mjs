@@ -42,6 +42,13 @@ specs.quote_request={label:'Quote Inquiries',prefix:'RFQ',module:'Sales & CRM',f
 rowSpecs.courierGoods=[f('product','Product','text',true),f('quantity','Quantity','decimal',true),f('uom','Quantity UOM'),f('po_number','PO number'),f('invoice_number','Invoice number'),f('order_date','Order date','date'),f('description','Description'),f('hs_code','HS code'),f('unit_price','Unit price','money'),f('currency','Currency',currencies),f('lot_code','Lot code'),f('production_date','Production date','date'),f('expiration_date','Expiration date','date')];
 specs.courier={label:'Courier Shipments',prefix:'COU',module:'Operations',fields:[f('title','Shipment reference','text',true),f('client_user_id','Client account','user:customer',true),f('date','Date','date',true),f('logistic_id','Logistic ID','text',true),f('logistic_partner','Logistic partner'),f('shipper','Shipper'),f('consignee','Consignee'),f('tracking_url','Cargo tracking URL','url'),f('goods','Goods','rows:courierGoods'),f('notes','Notes','long')]};
 specs.quote_request.fields.push(f('packages','Packages / dimensions','rows:packages'));
+rowSpecs.legs=[f('id','Leg ID','text',true),f('mode','Transport mode',route[0].type,true),f('cargo_type','Cargo type',route[2].type,true),f('origin','From','text',true),f('destination','To','text',true),f('origin_country','Origin country','text',true),f('destination_country','Destination country','text',true),f('carrier','Carrier'),f('departure','Planned departure','date'),f('arrival','Planned arrival','date')];
+for(const kind of ['quote_request','quote','shipment','invoice','proforma']){
+ if(!specs[kind].fields.some(field=>field.key==='multimodal'))specs[kind].fields.push(f('multimodal','Multimodal journey','boolean'));
+ specs[kind].fields.push(f('legs','Journey legs','rows:legs'));
+}
+rowSpecs.charges.push(f('leg_id','Journey leg'));
+for(const kind of ['rate_request','carrier_booking','vendor_bill'])specs[kind].fields.push(f('leg_id','Journey leg'));
 export const portalFields=Object.fromEntries(['quote_request','courier'].map(kind=>[kind,specs[kind].fields.filter(field=>field.key!=='client_user_id')]));
 specs.quote.fields.push(f('source_request_id','Source inquiry','ref:quote_request'));
 specs.quote.fields.push(f('approval_required','Require internal approval before publication','boolean'));
@@ -54,6 +61,7 @@ specs.target.fields.push(f('reporting_manager_id','Reporting manager','user:erp'
 rowSpecs.monthlyTargets=[f('period','Period','month',true),f('parameter','Parameter','enum:Weight|Volume|Gross Revenue|Gross Margin|Quotation|TEUs',true),f('value','Target value','decimal',true)];
 for(const kind of ['quote','shipment'])specs[kind].fields.push(f('pickup_contact','Pickup contact'),f('delivery_contact','Delivery contact'),f('pickup_at','Pickup date & time','datetime'),f('delivery_at','Delivery date & time','datetime'),f('cargo_specification','Cargo specification','long'),f('service_type','Service priority','enum:Standard|Priority'),f('special_consideration','Special consideration','long'));
 specs.invoice_request={label:'Vendor Invoice Requests',prefix:'VIR',module:'Accounting',fields:[...shared,f('shipment_id','House shipment','ref:shipment',true),f('vendor_user_id','Vendor account','user:vendor',true),f('date','Request date','date',true),f('currency','Currency',currencies,true),f('requested_charges','Requested charges','rows:vendorCharges',true),f('notes','Instructions','long')]};
+specs.invoice_request.fields.push(f('leg_id','Journey leg'));
 rowSpecs.requestInvoices=[f('bill_number','Bill number','text',true),f('bill_date','Bill date','date',true),f('currency','Currency',currencies,true),f('total','Total','money',true)];
 specs.quote.fields.splice(3,0,f('job_type','Quote for','enum:Shipment|Service Job'));
 specs.shipment.fields.push(f('paid_place','Paid place'),f('place_issue','Place of issue'),f('place_receipt','Place of receipt'),f('place_delivery','Place of delivery'),f('originals','Originals','integer'),f('copies','Copies','integer'),f('cargo_received','Cargo received date','date'),f('issue_date','Issue date','date'),f('receipt_date','Receipt date','date'),f('onboard_date','Ship onboard date','date'),f('cutoff_date','Port cut-off date','date'),f('customer_reference','Customer reference'),f('commercial_invoice','Commercial invoice'),f('payment_terms','Payment terms','enum:Prepaid|Collect'),f('free_days','Free days','integer'),f('marks','Marks & numbers','long'),f('instructions','Instructions','long'));
@@ -76,9 +84,16 @@ export function validateFields(input,fields){
   }result[field.key]=value;
  }return result;
 }
+export function normalizeJourneyRoute(input){
+ if(input?.multimodal!==true||!Array.isArray(input.legs)||!input.legs.length)return input;
+ const first=input.legs[0],last=input.legs.at(-1);return {...input,transport_mode:first?.mode,cargo_type:first?.cargo_type,origin:first?.origin,origin_country:first?.origin_country,destination:last?.destination,destination_country:last?.destination_country};
+}
 export function validateRecord(kind,input){
  if(!Object.hasOwn(specs,kind))throw new Error('Unknown record type.');
- const data=validateFields(input,specs[kind].fields);
+ const data=validateFields(normalizeJourneyRoute(input),specs[kind].fields);
+ validateJourney(data);
+ if(kind==='quote'&&data.multimodal&&data.job_type==='Service Job')throw new Error('Multimodal journeys require a shipment quotation.');
+ if(['rate_request','carrier_booking','invoice_request','vendor_bill'].includes(kind)&&data.leg_id&&!data.quote_id&&!data.shipment_id)throw new Error('A journey leg requires a linked quotation or shipment.');
  for(const [from,to]of [['date','expiry_date'],['valid_from','valid_to']])if(data[from]&&data[to]&&data[from]>data[to])throw new Error('End date cannot precede start date.');
  if(data.pickup_at&&data.delivery_at&&data.pickup_at>data.delivery_at)throw new Error('Delivery cannot precede pickup.');
  if(data.transport_mode&&data.cargo_type&&data.cargo_type!=='General Cargo'&&!cargoTypes[data.transport_mode]?.includes(data.cargo_type))throw new Error('Cargo type is not available for this transport mode.');
@@ -98,6 +113,32 @@ export function validateRecord(kind,input){
  for(const row of [...(data.charges||[]),...(data.vendor_charges||[])]){if(Number(row.quantity)<=0)throw new Error('Charge quantity must be positive.');if(row.exchange_rate!==undefined&&Number(row.exchange_rate)<=0)throw new Error('Exchange rate must be positive.');if(row.currency&&row.currency!==data.currency&&!row.exchange_rate)throw new Error('An exchange rate is required for a different line currency.');}
  if(data.charges){const amounts=documentTotals(kind,data.charges);if(['cost','revenue','tax','total'].some(key=>scaled(amounts[key])>999999999999999999n))throw new Error('Document amounts exceed the supported accounting limit.');}
  return data;
+}
+export function validateJourney(data){
+ const legs=data.legs||[];
+ if(!data.multimodal){if(legs.length)throw new Error('Enable multimodal before adding journey legs.');return;}
+ if(legs.length<2)throw new Error('A multimodal journey requires at least two legs.');
+ if(data.pickup_at&&legs[0].departure&&data.pickup_at.slice(0,10)>legs[0].departure)throw new Error('Pickup cannot be after the first departure.');
+ if(data.delivery_at&&legs.at(-1).arrival&&data.delivery_at.slice(0,10)<legs.at(-1).arrival)throw new Error('Delivery cannot be before the final arrival.');
+ if(new Set(legs.map(leg=>leg.mode)).size<2)throw new Error('Use at least two transport modes.');
+ const ids=new Set(),same=(a,b)=>a?.trim().toLowerCase()===b?.trim().toLowerCase();
+ for(let i=0;i<legs.length;i++){
+  const leg=legs[i];if(!/^[A-Za-z][A-Za-z0-9_-]{0,39}$/.test(leg.id)||ids.has(leg.id))throw new Error('Journey leg IDs must be unique and use letters, digits, underscores or hyphens.');ids.add(leg.id);
+  if(!cargoTypes[leg.mode]?.includes(leg.cargo_type))throw new Error('Select a valid cargo type for each journey leg.');
+  if(same(leg.origin,leg.destination)&&same(leg.origin_country,leg.destination_country))throw new Error('A journey leg must connect different locations.');
+  if(leg.departure&&leg.arrival&&leg.departure>leg.arrival)throw new Error('Leg arrival cannot precede departure.');
+  const previous=legs[i-1];if(previous){if(!same(previous.destination,leg.origin)||!same(previous.destination_country,leg.origin_country))throw new Error('Each leg must start where the previous leg ends.');if(previous.arrival&&leg.departure&&previous.arrival>leg.departure)throw new Error('A connecting leg cannot depart before the previous arrival.');}
+ }
+ for(const line of data.charges||[])if(!ids.has(line.leg_id))throw new Error('Assign every charge to a valid journey leg.');
+}
+export function advanceJourney(legs,progress,legId,event,at){
+ const index=legs.findIndex(leg=>leg.id===legId);if(index<0)throw new Error('Journey leg not found.');
+ const transitions={Draft:{book:'Booked'},Booked:{depart:'In Transit'},'In Transit':{arrive:'Arrived'},Arrived:{complete:'Completed'}};
+ const state=progress[legId]?.state||'Draft';if(typeof event!=='string'||!Object.hasOwn(transitions[state]||{},event))throw new Error('This leg transition is not allowed.');const next=transitions[state][event];
+ if(event==='depart'&&index>0&&progress[legs[index-1].id]?.state!=='Completed')throw new Error('Complete the previous leg before departing.');
+ const updated={...progress,[legId]:{state:next,updated_at:at}},states=legs.map(leg=>updated[leg.id]?.state||'Draft');
+ const status=states.every(s=>s==='Completed')?'Completed':states.every(s=>['Arrived','Completed'].includes(s))?'Arrived':states.some(s=>['In Transit','Arrived','Completed'].includes(s))?'In Transit':states.some(s=>s==='Booked')?'Booked':'Draft';
+ return {progress:updated,status};
 }
 export const scaled=(value,places=2)=>{const [whole,decimal='']=String(value||'0').split('.');if(!/^\d+$/.test(whole)||!/^\d*$/.test(decimal)||decimal.length>places)throw new Error('Invalid decimal precision.');return BigInt(whole)*10n**BigInt(places)+BigInt(decimal.padEnd(places,'0')||'0');};
 export const money=value=>`${value/100n}.${String(value%100n).padStart(2,'0')}`;
@@ -131,6 +172,7 @@ export const workflows={
  target:{Draft:{activate:'Active',archive:'Archived'},Active:{archive:'Archived'}}
 };
 workflows.rate_request.Pending.save_rates='Pending';
+for(const status of ['Draft','Booked','In Transit','Arrived'])workflows.shipment[status].advance_leg=status;
 workflows.quote.Draft.send='Sent';
 workflows.quote.Renegotiate.send='Sent';
 for(const status of ['Rejected','Expired','Cancelled'])workflows.quote[status]={revise:status};
@@ -161,6 +203,7 @@ export function actionsFor(record,user){
  if(record.kind==='quote'&&record.status==='Sent')actions=actions.filter(a=>a!=='reject');
  if(record.kind==='quote'&&['Draft','Renegotiate'].includes(record.status))actions=actions.filter(a=>a!=='send'||record.details.approval_required===false);
  if(record.kind==='quote'&&record.details._revision_id)actions=actions.filter(a=>a!=='revise');
+ if(record.kind==='shipment')actions=record.details.multimodal?actions.filter(a=>!['book','depart','arrive','complete'].includes(a)):actions.filter(a=>a!=='advance_leg');
  if(record.kind==='quote')actions=actions.filter(a=>!['approve','reject'].includes(a)||record.details.approver_user_id===user.id);
  return actions;
 }

@@ -4,12 +4,14 @@ export const reportDefinitions={
  quote_status:'Quote Analysis by Status',sales_agent:'Sales Agent Report',opportunities:'Opportunity Detail Report',visits:'Customer Visit Report',quote_charges:'Charges Wise Quotation Report',customer_sales:'Sales Report by Customer',carrier_sales:'Sales Report by Shipping Lines',custom_duty:'Custom Duty Report',estimated_actual:'Charge Wise Shipment Estimated vs Actual',shipment_profit:'Shipment Profit Report',shipper:'Shipper Wise Report',customer:'Customer Wise Report',volume:'Customer Volume Report',customer_status:'Customer Status Report',emissions:'Carbon Emission Report',courier:'Courier Shipment Report',tariffs:'Tariff Validity Report',receivables:'Outstanding Receivables',payables:'Outstanding Payables'
 };
 reportDefinitions.target_actuals='Target vs Actual';
+reportDefinitions.journeys='Multimodal Journey Progress';
 export function buildReport(key,records,users=[],role='erp'){
  const quotes=records.filter(r=>r.kind==='quote'),shipments=records.filter(r=>r.kind==='shipment');
  const name=id=>records.find(r=>r.id===id)?.details.name||`Organization ${id}`;
  const userName=id=>users.find(u=>u.id===id)?.name||`Account ${id}`;
  const ref=r=>r.number||`${r.kind.toUpperCase()}-${r.id}`;
  const result=(headers,rows)=>({headers,rows});
+ if(key==='journeys')return result(['Shipment','Leg','Mode','Cargo type','From','To','Carrier','Planned departure','Planned arrival','Leg status','Journey status'],shipments.filter(r=>r.details.multimodal).flatMap(r=>r.details.legs.map(leg=>[ref(r),leg.id,leg.mode,leg.cargo_type,leg.origin,leg.destination,leg.carrier||'',leg.departure||'',leg.arrival||'',r.details._leg_progress?.[leg.id]?.state||'Draft',r.status])));
  if(key==='target_actuals')return result(['Target','Sales agent','Period','Parameter','Currency','Target value','Actual value','Variance','Achievement %'],records.filter(r=>r.kind==='target'&&r.status!=='Archived').flatMap(r=>targetProgress(r.details,records).map(line=>[r.details.title,userName(r.details.sales_agent_id),line.period,line.parameter,['Gross Revenue','Gross Margin'].includes(line.parameter)?r.details.currency:'',line.value,line.actual,line.variance,line.achievement??'—'])));
  function grouped(rows,dimension){const groups=new Map();for(const record of rows){const label=dimension(record),currency=record.details.currency||'',index=label+'\0'+currency;let entry=groups.get(index);if(!entry){entry={label,currency,count:0,revenue:0n,cost:0n};groups.set(index,entry);}const total=documentTotals(record.kind,record.details.charges||[]);entry.count++;entry.revenue+=scaled(total.revenue);entry.cost+=scaled(total.cost);}return result(['Group','Currency','Count','Revenue','Cost','Profit'],[...groups.values()].map(g=>[g.label,g.currency,g.count,money(g.revenue),role==='erp'?money(g.cost):'',role==='erp'?(g.revenue>=g.cost?money(g.revenue-g.cost):'-'+money(g.cost-g.revenue)):'']));}
  if(key==='quote_status')return grouped(quotes,r=>r.status);

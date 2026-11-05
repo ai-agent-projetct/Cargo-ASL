@@ -2,6 +2,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import {JSDOM} from 'jsdom';
+import {landSeaLegs,railLeg} from '../scripts/fixtures/multimodal.mjs';
 const source=await readFile(new URL('../public/workspace.js',import.meta.url),'utf8');
 async function waitFor(condition){for(let i=0;i<100;i++){if(condition())return;await new Promise(resolve=>setImmediate(resolve));}throw new Error('UI did not reach expected state.');}
 async function harness(role='erp',authenticated=true){
@@ -30,6 +31,24 @@ async function harness(role='erp',authenticated=true){
  return {dom,requests,records,document:dom.window.document};
 }
 test('workspace form and portal handlers in an emulated DOM',async t=>{
+ await t.test('client enters connected road, sea and train legs without losing edits or row booleans',async()=>{
+  const {document,requests}=await harness('customer');document.querySelector('[data-nav=quote_request]').click();document.querySelector('[data-action=create]').click();await new Promise(resolve=>setImmediate(resolve));document.querySelector('[name=multimodal]').click();
+  const legs=[...landSeaLegs,railLeg];for(const [i,leg]of legs.entries()){
+   document.querySelector('[data-add=legs]').click();const mode=document.querySelector(`[name="legs.${i}.mode"]`);mode.value=leg.mode;mode.dispatchEvent(new window.Event('change'));
+   for(const [key,value]of Object.entries(leg))document.querySelector(`[name="legs.${i}.${key}"]`).value=value;
+  }
+  document.querySelector('[data-move-leg="2:-1"]').click();assert.equal(document.querySelector('[name="legs.1.id"]').value,'RAIL');document.querySelector('[data-move-leg="1:1"]').click();
+  document.querySelector('[data-add=packages]').click();document.querySelector('[name="packages.0.type"]').value='Box';document.querySelector('[name="packages.0.hazardous"]').checked=true;
+  document.querySelector('#record-form').dispatchEvent(new window.Event('submit',{cancelable:true}));await waitFor(()=>requests.some(r=>r.method==='POST'&&r.path==='/api/workspace/records')).catch(error=>{throw Error(error.message+' '+document.querySelector('[role=alert]')?.textContent);});
+  const payload=requests.find(r=>r.method==='POST'&&r.path==='/api/workspace/records').input.details;assert.deepEqual(payload.legs.map(l=>l.id),['ROAD','SEA','RAIL']);assert.equal(payload.legs[1].origin,'Aster Port');assert.equal(payload.packages[0].hazardous,true);assert.equal(payload.multimodal,true);
+ });
+ await t.test('leg-specific booking form and train filter preserve the linked shipment',async()=>{
+  const {document,records,requests}=await harness();records.push({id:31,kind:'shipment',owner_id:1,number:'SHP-000031',status:'Draft',version:1,details:{title:'QA multimodal',organization_id:2,currency:'USD',shipment_type:'Export',multimodal:true,legs:[...landSeaLegs,railLeg]},actions:['advance_leg'],editable:true,notes:[],documents:[],history:[],payments:[],followers:[]});
+  document.querySelector('[data-action=refresh]').click();await waitFor(()=>document.querySelector('[data-open="31"]'));await new Promise(resolve=>setImmediate(resolve));document.querySelector('[data-nav=shipment]').click();const filter=document.querySelector('#route-transport_mode');filter.value='Rail Freight';filter.dispatchEvent(new window.Event('change'));assert.ok(document.querySelector('[data-open="31"]'));
+  let cargo=document.querySelector('#route-cargo_type');cargo.value='Full Truck Load';cargo.dispatchEvent(new window.Event('change'));assert.equal(document.querySelector('[data-open="31"]'),null);cargo=document.querySelector('#route-cargo_type');cargo.value='Full Container Load';cargo.dispatchEvent(new window.Event('change'));assert.ok(document.querySelector('[data-open="31"]'));
+  document.querySelector('[data-open="31"]').click();await waitFor(()=>document.querySelector('[data-leg-task="carrier_booking:RAIL"]'));document.querySelector('[data-leg-task="carrier_booking:RAIL"]').click();assert.equal(document.querySelector('[name=leg_id]').value,'RAIL');assert.equal(document.querySelector('[name=shipment_id]').value,'31');assert.equal(document.querySelector('[name=carrier]').value,'Juniper Rail');
+  document.querySelector('#record-form').dispatchEvent(new window.Event('submit',{cancelable:true}));await waitFor(()=>requests.some(r=>r.method==='POST'&&r.path==='/api/workspace/records'));assert.equal(requests.find(r=>r.method==='POST'&&r.path==='/api/workspace/records').input.details.leg_id,'RAIL');
+ });
  await t.test('login failure is displayed; successful login uses the selected portal',async()=>{
   const {document,requests}=await harness('erp',false);
   document.querySelector('[name=email]').value='qa@cargoasl.invalid';document.querySelector('[name=password]').value='wrong';

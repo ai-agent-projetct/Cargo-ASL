@@ -36,14 +36,14 @@ The source invoice remains awaiting review. Its form confirms that approval crea
 | Sales targets too limited | Six parameters, date ranges, monthly target lines, regeneration, recomputed actuals, reporting-manager/incentive metadata | Unit, API |
 | Portal navigation/filter gaps | Route filters, saved filters, invoice pending/overdue filters, courier and CO2 access | Unit, API, Chrome |
 
-Latest local verification: **70 automated tests**, **38 live workflow checks**, **12 named defensive integration cases**, **all three demo logins**, and **8 actual Chrome scenarios** passed. Tests use fictional local records and remove their temporary fixtures. Source QA records remain available for review.
+Latest local verification (5 November): **96 automated tests**, **71 live workflow checks**, **12 named defensive integration cases**, **all three demo logins**, and **25 actual Chrome scenarios** passed. Both requested land/sea and land/sea/train journeys reached paid invoices and balanced ledgers; see [the multimodal report](multimodal-testing.md). Tests use fictional local records and remove their temporary fixtures. Source QA records remain available for review.
 
 ## Remaining parity and deployment work
 
 | Area | Remaining differences or unverified behavior |
 |---|---|
 | Consolidation and operational states | Master Shipment linking; Confirmed, HAWB/BL/Nomination generation and Job Close controls remain incomplete |
-| Advanced quotations | Multi-carrier/multimodal options, vendor counteroffers/renegotiation rounds, minimum charges, measurement-basis formulas, line inclusion/grouping and all conditional incoterm rules need implementation/comparison |
+| Advanced quotations | Ordered multimodal road/sea/rail journeys are implemented and tested. Exact source multimodal/multi-carrier option grouping, counteroffers/renegotiation rounds, minimum charges, measurement-basis formulas, line inclusion/grouping and all conditional incoterm rules still need comparison |
 | Customer quote actions | Source Accept & Sign captures a signature; Cargo ASL currently records acceptance without an equivalent signature workflow. Source inquiry cancellation/reason behavior is not fully exercised |
 | Vendor invoice detail | Source offers per-charge matching, FX and manual/OCR extraction, optional header fields, file preview/deletion and partial drafts. Cargo ASL currently saves complete metadata/document drafts and invoice totals; these detailed functions are not equivalent |
 | Documents/accounting | Debit notes, every pro forma approval rule, branded PDF/email attachments, BL upload and DOCX template generation remain incomplete |

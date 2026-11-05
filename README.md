@@ -25,12 +25,12 @@ On this workstation, `Start Cargo ASL.cmd` starts the app and dedicated MySQL in
 - Client-created courier shipments with product quantities, UOM, PO/invoice references, HS codes, unit prices, currencies, lots and production/expiry dates. Saved courier records are read-only to clients.
 - Vendor rate requests with saved drafts, validity dates and portal submission. Submitted costs automatically reach an owned, editable quotation once; admins set selling prices separately.
 - Vendor invoice requests, complete invoice drafts, submission of saved original files, rejection with reasons, resubmission and approval. Approval creates draft supplier bills with their original documents; posting remains a separate reviewed action.
-- Shipments, service jobs and carrier bookings, including parties, packages, routing, milestones, customs, insurance and document details.
+- Shipments, service jobs and carrier bookings, including parties, packages, routing, milestones, customs, insurance and document details. Multimodal quotations support ordered road/sea/rail legs, per-leg costs and rates, confirmed bookings, protected handoffs and whole-journey invoicing.
 - Pro forma conversion, invoice and supplier-bill posting, partial/full payments, credit notes and balanced ledger entries.
 - Master-data categories, tariffs, account creation, activation/deactivation and password resets that invalidate sessions.
 - Internal/shared notes and attachments, audit history, record followers and notifications.
 - Search, filters, saved filters, grouping, list/kanban/date views, charge CSV import, CSV exports and printable records.
-- Twenty report views, including charge estimates vs actuals, profit, outstanding balances, customer volumes, courier shipments, recorded emissions and sales targets. Targets support weight, volume, revenue, margin, quotation count and TEUs. Monthly regeneration allocates totals equally, with editable monthly lines; equivalence to the source allocation formula is unverified.
+- Twenty-one report views, including charge estimates vs actuals, profit, outstanding balances, customer volumes, courier shipments, recorded emissions and sales targets. Targets support weight, volume, revenue, margin, quotation count and TEUs. Monthly regeneration allocates totals equally, with editable monthly lines; equivalence to the source allocation formula is unverified.
 - Email outbox with reviewed messages and actual SMTP delivery when configured. Demo addresses are blocked. SMTP credentials are optional locally; an unconfigured outbox does not report messages as sent.
 
 Existing earlier quotation drafts remain accessible at `/legacy`. They are a separate data model and are not automatically migrated into the new workspace. The earlier read-only visual preview is `/legacy?preview=1`.
@@ -42,9 +42,12 @@ npm test
 npm run test:integration
 npm run test:portals
 npm run test:workflow
+npm run test:multimodal
 ```
 
-REA 6.5.0 is also used for real-browser acceptance. Set `REA_CLI` to your installed `rea-agents/scripts/rea.mjs` and `BROWSER_EXECUTABLE` to Chrome, then run `npm run test:browser`. The eight scenarios use fictional temporary records and clean them up. Captures remain private under `.local/browser-tests/`. GitHub Actions installs the pinned REA CLI and runs these scenarios too.
+REA 6.5.0 is also used for real-browser acceptance. Set `REA_CLI` to your installed `rea-agents/scripts/rea.mjs` and `BROWSER_EXECUTABLE` to Chrome, then run `npm run test:browser`. The eight baseline scenarios use fictional temporary records and clean them up. `npm run test:browser:journeys` runs 17 additional Chrome scenarios for land + sea and land + sea + train, through invoice payment. Captures remain private under `.local/browser-tests/`. GitHub Actions installs the pinned REA CLI and runs these scenarios too.
+
+Run `npm run demo:journeys` to create two completed fictional examples under the existing demo logins. Search House Shipments for **Demo Land + Sea** and **Demo Land + Sea + Train**. Repeating the command verifies the paid examples without duplicating them. See the [multimodal test report](docs/multimodal-testing.md) for routes, amounts and assertions.
 
 New clients are routed to the active account manager associated with their existing Cargo ASL records. For clients without existing records, `INTAKE_ADMIN_EMAIL` selects the intake manager; otherwise the initial administrator or first active admin receives the request.
 

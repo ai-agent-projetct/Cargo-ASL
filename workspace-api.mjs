@@ -1,6 +1,7 @@
-import {specs,rowSpecs,portalFields,workflows,validateFields,validateRecord,totals,documentTotals,scaled,money,canRead,canEdit,actionsFor,editable} from './business.mjs';
+import {specs,rowSpecs,portalFields,workflows,validateFields,validateRecord,totals,documentTotals,scaled,money,canRead,canEdit,actionsFor,editable,advanceJourney,normalizeJourneyRoute} from './business.mjs';
 import {deliver,smtpSettings} from './mailer.mjs';
 import {generateTargetMonths,targetProgress} from './targets.mjs';
+import {isDeepStrictEqual} from 'node:util';
 const fail=(status,message)=>{throw Object.assign(new Error(message),{status});};
 const today=()=>new Date().toISOString().slice(0,10);
 const assertInput=value=>{if(!value||typeof value!=='object'||Array.isArray(value))fail(400,'An object is required.');};
@@ -44,9 +45,18 @@ async function references(db,kind,data,user){
  if(['invoice','proforma','vendor_bill'].includes(kind))for(const key of ['shipment_id','service_job_id'])if(data[key]){const source=await recordById(db,data[key],user);if(data.currency!==source.details.currency)fail(400,'Document currency must match the linked job.');if(data.client_user_id&&data.client_user_id!==source.details.client_user_id)fail(400,'Client must match the linked job.');}
  if(kind==='invoice_request'){const shipment=await recordById(db,data.shipment_id,user);if(shipment.details.currency!==data.currency)fail(400,'Invoice request currency must match its shipment.');}
  if(kind==='rate_request'&&data.quote_id){const quote=await recordById(db,data.quote_id,user);if(quote.owner_id!==user.id)fail(400,'Rate requests must link to an owned quotation.');if(quote.details.currency!==data.currency)fail(400,'Rate request currency must match the quotation.');}
+ if(['rate_request','carrier_booking','invoice_request','vendor_bill'].includes(kind)&&(data.quote_id||data.shipment_id)){
+  const parent=await recordById(db,data.quote_id||data.shipment_id,user),leg=parent.details.legs?.find(leg=>leg.id===data.leg_id);
+  if(parent.details.multimodal&&!leg)fail(400,'Select a valid leg from the linked journey.');
+  if(!parent.details.multimodal&&data.leg_id)fail(400,'The linked record has no journey legs.');
+  if(kind==='rate_request'&&leg)for(const [field,value]of [['transport_mode',leg.mode],['cargo_type',leg.cargo_type],['origin',leg.origin],['destination',leg.destination]])if(data[field]!==value)fail(400,'Rate request route must match its journey leg.');
+  if(kind==='vendor_bill'&&leg&&(data.charges||[]).some(line=>line.leg_id!==data.leg_id))fail(400,'Supplier bill lines must match the selected journey leg.');
+ }
+ if(['invoice','proforma'].includes(kind)&&data.shipment_id){const parent=await recordById(db,data.shipment_id,user);if(parent.details.multimodal&&(data.multimodal!==true||!isDeepStrictEqual(data.legs,parent.details.legs)))fail(400,'Invoice journey must match its shipment.');}
  if(kind==='credit_note'){const invoice=await recordById(db,data.invoice_id,user);if(invoice.details.currency!==data.currency||invoice.details.client_user_id!==data.client_user_id)fail(400,'Credit note currency and client must match the invoice.');if(!['Posted','Partially Paid'].includes(invoice.status))fail(400,'Credit notes require an outstanding posted invoice.');}
 }
 async function insert(db,kind,data,user){
+ if(['invoice','proforma'].includes(kind)&&data.shipment_id){const parent=await recordById(db,data.shipment_id,user);if(parent.details.multimodal)data={...data,multimodal:true,legs:parent.details.legs};}
  data=cleanError(()=>validateRecord(kind,data));
  let inquiry;if(kind==='quote'&&data.source_request_id){inquiry=await recordById(db,data.source_request_id,user,true);if(inquiry.kind!=='quote_request'||inquiry.status!=='Submitted')fail(409,'This inquiry has already been handled.');if(inquiry.owner_id!==user.id)fail(403,'Only the inquiry owner can prepare it.');if(inquiry.details.client_user_id!==data.client_user_id)fail(400,'Quotation client must match the inquiry.');}
  await references(db,kind,data,user);
@@ -154,7 +164,7 @@ export async function workspaceApi({req,res,url,user,pool,body,json,derive,rando
   if(!id){
    if(user.role==='customer'&&Object.hasOwn(portalFields,input.kind)){
     if(input.documents!==undefined&&(!Array.isArray(input.documents)||input.documents.length>3))fail(400,'Attach at most three documents.');const documents=(input.documents||[]).map(documentInput);
-    const details=cleanError(()=>{const submitted=validateFields(input.details,portalFields[input.kind]);submitted.title||=input.kind==='courier'?submitted.logistic_id:'Quote inquiry';if(input.kind==='courier')submitted.date||=today();return validateRecord(input.kind,{...submitted,client_user_id:user.id});});
+    const details=cleanError(()=>{const submitted=validateFields(normalizeJourneyRoute(input.details),portalFields[input.kind]);submitted.title||=input.kind==='courier'?submitted.logistic_id:'Quote inquiry';if(input.kind==='courier')submitted.date||=today();return validateRecord(input.kind,{...submitted,client_user_id:user.id});});
     const [related]=await db.execute("SELECT u.id FROM business_records r JOIN users u ON u.id=r.owner_id AND u.active=TRUE AND u.role='erp' WHERE CAST(JSON_UNQUOTE(JSON_EXTRACT(r.details,'$.client_user_id')) AS UNSIGNED)=? ORDER BY r.id DESC LIMIT 1",[user.id]);
     const [fallback]=related.length?[related]:await db.execute("SELECT id FROM users WHERE role='erp' AND active=TRUE ORDER BY (email=?) DESC,id LIMIT 1",[process.env.INTAKE_ADMIN_EMAIL||process.env.ADMIN_EMAIL||'']);
     const owner=fallback[0];if(!owner)fail(503,'No active account manager is available. Please contact Cargo ASL.');
@@ -169,11 +179,18 @@ export async function workspaceApi({req,res,url,user,pool,body,json,derive,rando
   if(req.method==='PUT'&&!sub){
    if(!canEdit(record,user)){if(user.role==='erp'&&record.owner_id===user.id)fail(409,'This status is locked for editing.');fail(403,'You cannot edit this record.');}
    const submitted=user.role==='customer'?{...cleanError(()=>validateFields(input.details,portalFields[record.kind])),client_user_id:user.id}:input.details;
-   const data=cleanError(()=>validateRecord(record.kind,submitted));if(record.details._portal_inquiry){data._portal_inquiry=true;data.source_request_id=record.id;}await references(db,record.kind,data,user);if(record.details._published)data._published=true;record.details=data;await save(db,record,user,'edit');
+   const data=cleanError(()=>validateRecord(record.kind,submitted));if(record.details._portal_inquiry){data._portal_inquiry=true;data.source_request_id=record.id;}
+   if(record.kind==='shipment'&&record.details._leg_progress){if(!data.multimodal||!isDeepStrictEqual(data.legs,record.details.legs))fail(409,'Journey legs are locked after booking.');data._leg_progress=record.details._leg_progress;}
+   await references(db,record.kind,data,user);if(record.details._published)data._published=true;record.details=data;await save(db,record,user,'edit');
   }else if(req.method==='POST'&&sub==='action'){
    const action=input.action;if(!actionsFor(record,user).includes(action))fail(403,'This action is not allowed for your role and the current status.');
    if(record.kind==='quote_request'&&action==='prepare')fail(400,'Create a quotation linked to this inquiry to complete preparation.');
    const d=record.details;let next;
+   if(record.kind==='shipment'&&action==='advance_leg'){
+    const journey=cleanError(()=>advanceJourney(d.legs,d._leg_progress||{},input.leg_id,input.event,new Date().toISOString()));
+    if(['book','depart'].includes(input.event)){const [bookings]=await db.execute("SELECT id FROM business_records WHERE kind='carrier_booking' AND owner_id=? AND status IN ('Confirmed','Completed') AND CAST(JSON_UNQUOTE(JSON_EXTRACT(details,'$.shipment_id')) AS UNSIGNED)=? AND JSON_UNQUOTE(JSON_EXTRACT(details,'$.leg_id'))=? LIMIT 1",[record.owner_id,id,input.leg_id]);if(!bookings.length)fail(409,'Confirm a carrier booking for this journey leg first.');}
+    d._leg_progress=journey.progress;next=journey.status;
+   }
    if(record.kind==='target'&&action==='generate_months'){d.monthly_targets=cleanError(()=>generateTargetMonths(d));delete d._actuals;delete d._recomputed_at;}
    if(record.kind==='target'&&action==='recompute'){const [sources]=await db.execute("SELECT * FROM business_records WHERE owner_id=? AND kind IN ('quote','shipment')",[user.id]);d._actuals=cleanError(()=>targetProgress(d,sources));d._recomputed_at=new Date().toISOString();}
    if(record.kind==='invoice_request'){
@@ -196,7 +213,7 @@ export async function workspaceApi({req,res,url,user,pool,body,json,derive,rando
     if(action==='approve'){
      if(!d.submitted_invoices?.length||d._bill_ids?.length)fail(409,'Invoices are missing or this request has already been approved.');d._bill_ids=[];
      for(const invoice of d.submitted_invoices){
-      const billId=await insert(db,'vendor_bill',{title:invoice.bill_number,organization_id:d.organization_id,vendor_user_id:d.vendor_user_id,shipment_id:d.shipment_id,date:invoice.bill_date,due_date:today(),currency:d.currency,charges:[{description:'Vendor invoice '+invoice.bill_number,quantity:'1',cost_rate:invoice.total,sell_rate:'0',tax_percent:'0'}],notes:'Created from '+record.kind+' '+id+'. Review tax allocation and supporting documents before posting.'},user);d._bill_ids.push(billId);
+      const billId=await insert(db,'vendor_bill',{title:invoice.bill_number,organization_id:d.organization_id,vendor_user_id:d.vendor_user_id,shipment_id:d.shipment_id,leg_id:d.leg_id,date:invoice.bill_date,due_date:today(),currency:d.currency,charges:[{description:'Vendor invoice '+invoice.bill_number,quantity:'1',cost_rate:invoice.total,sell_rate:'0',tax_percent:'0',leg_id:d.leg_id}],notes:'Created from '+record.kind+' '+id+'. Review tax allocation and supporting documents before posting.'},user);d._bill_ids.push(billId);
       const [copied]=await db.execute("INSERT INTO record_documents(record_id,user_id,name,mime,content,visibility) SELECT ?,?,name,mime,content,'shared' FROM record_documents WHERE id=? AND record_id=?",[billId,user.id,invoice.document_id,id]);if(!copied.affectedRows)fail(409,'The supporting invoice document is missing.');
      }
     }
@@ -225,6 +242,7 @@ export async function workspaceApi({req,res,url,user,pool,body,json,derive,rando
     if(action==='convert'){
      const shipment={...d,title:d.title,quote_id:id,booking_reference:`BK-${String(id).padStart(6,'0')}`,date:today(),po_status:'Pending'};
      const service=d.job_type==='Service Job';d._converted_id=await insert(db,service?'service_job':'shipment',service?{...shipment,service_type:'From quotation'}:shipment,user);
+     await db.execute('INSERT INTO record_documents(record_id,user_id,name,mime,content,visibility) SELECT ?,user_id,name,mime,content,visibility FROM record_documents WHERE record_id=?',[d._converted_id,id]);
     }
    }
    if(record.kind==='lead'&&action==='convert')d._converted_id=await insert(db,'opportunity',{...d,lead_id:id,probability:'25'},user);
@@ -233,7 +251,8 @@ export async function workspaceApi({req,res,url,user,pool,body,json,derive,rando
     const quote=quotes[0];if(!quote||!['Draft','Renegotiate'].includes(quote.status))fail(409,'The linked quote is unavailable or locked.');
     if(!d.vendor_charges?.length)fail(400,'No vendor rates have been submitted.');
     if(d.currency!==quote.details.currency)fail(400,'Rate request and quote currencies must match before importing rates.');
-    const charges=[...(quote.details.charges||[]),...d.vendor_charges.map(r=>({...r,sell_rate:'0',tax_percent:'0'}))];
+    if(quote.details.multimodal){const leg=quote.details.legs?.find(leg=>leg.id===d.leg_id);if(!leg||d.transport_mode!==leg.mode||d.cargo_type!==leg.cargo_type||d.origin!==leg.origin||d.destination!==leg.destination)fail(409,'The rate request route has changed. Request updated rates for this leg.');}
+    const charges=[...(quote.details.charges||[]),...d.vendor_charges.map(r=>({...r,sell_rate:'0',tax_percent:'0',leg_id:d.leg_id}))];
     cleanError(()=>validateRecord('quote',{...quote.details,charges}));quote.details.charges=charges;await save(db,quote,user,'import vendor rates');d._rates_imported=true;
    }
    if(['shipment','service_job'].includes(record.kind)&&action==='invoice'){
@@ -243,6 +262,7 @@ export async function workspaceApi({req,res,url,user,pool,body,json,derive,rando
    }
    if(record.kind==='proforma'&&action==='convert')d._invoice_id=await insert(db,'invoice',d,user);
    if(['invoice','vendor_bill'].includes(record.kind)&&action==='post'){
+    if(record.kind==='invoice'&&d.shipment_id){const shipment=await recordById(db,d.shipment_id,user);if(shipment.details.multimodal&&!shipment.details.legs.every(leg=>shipment.details._leg_progress?.[leg.id]?.state==='Completed'))fail(409,'Complete every journey leg before posting the final invoice.');}
     const t=documentTotals(record.kind,d.charges),gross=scaled(t.total),net=scaled(t.revenue),tax=scaled(t.tax);if(!gross)fail(400,'Document total must be positive.');
     if(record.kind==='invoice'){await ledger(db,record,'Accounts Receivable',gross);await ledger(db,record,'Sales Revenue',0n,net);await ledger(db,record,'Tax Payable',0n,tax);}
     else{await ledger(db,record,'Operating Expense',net);await ledger(db,record,'Tax Recoverable',tax);await ledger(db,record,'Accounts Payable',0n,gross);}
@@ -268,7 +288,7 @@ export async function workspaceApi({req,res,url,user,pool,body,json,derive,rando
     invoice.details._credits=money(scaled(invoice.details._credits||'0')+amount);invoice.details._net_credits=money(scaled(invoice.details._net_credits||'0')+net);if(await balance(db,invoice)===0n)invoice.status='Credited';await save(db,invoice,user,'credit applied');
    }
    record.status=next||workflows[record.kind][record.status][action];
-   await save(db,record,user,action);
+   await save(db,record,user,action==='advance_leg'?`leg ${input.leg_id}: ${input.event}`:action);
   }else fail(405,'Method not supported.');
   await db.commit();return json(res,200,projected(record,user));
  }catch(e){await db.rollback();throw e;}finally{db.release();}
