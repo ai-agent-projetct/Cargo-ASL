@@ -20,12 +20,14 @@ async function harness(role='erp',authenticated=true){
   if(path==='/api/me')return authenticated?result(user):result({error:'Sign in to Cargo ASL.'},401);
   if(path==='/api/login'){if(input.password==='wrong')return result({error:'Invalid email or password.'},401);authenticated=true;return result(user);}
   if(path==='/api/workspace/snapshot')return result({records,users:[{...user,active:1},{id:2,name:'QA Client',email:'client@cargoasl.invalid',role:'customer',active:1}],ledger:[],notifications:[],mail:[],smtpConfigured:false});
+  if(path==='/api/workspace/stock')return result({stock:[]});
+  if(path==='/api/workspace/readiness')return result({ready:false,checks:[]});
   if(path==='/api/workspace/records'&&options.method==='POST'){const record={id:20,kind:input.kind,details:input.details,owner_id:1,status:'Draft',version:1,number:'ORG-000020',actions:[],editable:true,notes:[],documents:[],history:[],payments:[],followers:[]};records.push(record);return result({id:20},201);}
   if(path==='/api/workspace/records/9/action'){records[0].details.vendor_charges=input.vendor_charges;records[0].details.validity_date=input.validity_date;records[0].status=input.action==='save_rates'?'Pending':'Submitted';records[0].actions=input.action==='save_rates'?['respond','save_rates']:[];return result({id:9});}
   const matched=/^\/api\/workspace\/records\/(\d+)$/.exec(path);if(matched)return result(records.find(record=>record.id===Number(matched[1])));
   return result({error:'Unhandled mocked request: '+path},404);
  };
- const modules={"'/reports.mjs'":JSON.stringify(new URL('../reports.mjs',import.meta.url).href),"'/business.mjs'":JSON.stringify(new URL('../business.mjs',import.meta.url).href),"'/quote-view.mjs'":JSON.stringify(new URL('../public/quote-view.mjs',import.meta.url).href),"'/csv-import.mjs'":JSON.stringify(new URL('../public/csv-import.mjs',import.meta.url).href)};
+ const modules={"'/freight-ui.mjs'":JSON.stringify(new URL('../public/freight-ui.mjs',import.meta.url).href),"'/reports.mjs'":JSON.stringify(new URL('../reports.mjs',import.meta.url).href),"'/business.mjs'":JSON.stringify(new URL('../business.mjs',import.meta.url).href),"'/quote-view.mjs'":JSON.stringify(new URL('../public/quote-view.mjs',import.meta.url).href),"'/csv-import.mjs'":JSON.stringify(new URL('../public/csv-import.mjs',import.meta.url).href)};
  let code=source;for(const [from,to]of Object.entries(modules))code=code.replaceAll(from,to);
  await import('data:text/javascript;base64,'+Buffer.from(code+'\n// '+Math.random()).toString('base64'));
  return {dom,requests,records,document:dom.window.document};

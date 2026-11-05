@@ -41,6 +41,7 @@ jobs:
           ENV
       - run: npm run db:init
       - run: npm run demo:seed
+      - run: npm run demo:operations
       - name: Start application
         run: |
           npm start > /tmp/cargo-asl.log 2>&1 &
@@ -50,18 +51,19 @@ jobs:
           done
           cat /tmp/cargo-asl.log
           exit 1
+      - run: npm run demo:workspace
+      - run: npm run demo:workspace
       - run: npm run test:integration
       - run: npm run test:portals
       - run: npm run test:workflow
       - run: npm run test:multimodal
-      - run: npm run demo:workspace
-      - run: npm run demo:workspace
-      - name: Install pinned REA browser-test CLI
-        run: npm install --global rea-agents@6.5.0 --no-audit --no-fund
-      - name: Real-browser portal acceptance
+      - run: npm run test:uploads
+      - name: Real Chrome acceptance with actual file uploads
         env:
           BROWSER_EXECUTABLE: /usr/bin/google-chrome
-        run: |
-          export REA_CLI="$(npm root -g)/rea-agents/scripts/rea.mjs"
-          npm run test:browser
-          npm run test:browser:journeys
+        run: npm run test:browser
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: freight-qa-evidence
+          path: .local/production-tests/

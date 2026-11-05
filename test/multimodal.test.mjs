@@ -62,7 +62,7 @@ test('unknown, skipped, repeated and prototype-named progress actions are reject
 });
 test('multimodal shipments expose leg advancement instead of whole-journey shortcuts',()=>{
  const r={kind:'shipment',owner_id:1,status:'Booked',details:{multimodal:true,client_user_id:7}};
- assert.deepEqual(actionsFor(r,{id:1,role:'erp'}),['cancel','advance_leg']);assert.deepEqual(actionsFor(r,{id:7,role:'customer'}),[]);
+ assert.deepEqual(actionsFor(r,{id:1,role:'erp'}),['cancel','advance_leg','prepare_documents','amend','apply_tariff']);assert.deepEqual(actionsFor(r,{id:7,role:'customer'}),[]);
  assert.ok(!actionsFor({...r,details:{...r.details,multimodal:false}},{id:1,role:'erp'}).includes('advance_leg'));
 });
 test('journey progress report includes train, ordered legs and states without financial fields',()=>{

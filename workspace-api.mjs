@@ -2,6 +2,11 @@ import {specs,rowSpecs,portalFields,workflows,validateFields,validateRecord,tota
 import {deliver,smtpSettings} from './mailer.mjs';
 import {generateTargetMonths,targetProgress} from './targets.mjs';
 import {isDeepStrictEqual} from 'node:util';
+import {financeReferences,financeAction,exchangeRate} from './freight-finance.mjs';
+import {operationsReferences,operationsAction,issuerProfile,relatedRecords} from './freight-operations.mjs';
+import {renderFreightPdf} from './freight-documents.mjs';
+import {buildReport,reportDefinitions} from './reports.mjs';
+import {releaseChecks} from './release-readiness.mjs';
 const fail=(status,message)=>{throw Object.assign(new Error(message),{status});};
 const today=()=>new Date().toISOString().slice(0,10);
 const assertInput=value=>{if(!value||typeof value!=='object'||Array.isArray(value))fail(400,'An object is required.');};
@@ -9,8 +14,10 @@ const cleanError=fn=>{try{return fn();}catch(e){fail(400,e.message);}};
 function documentInput(input){
  assertInput(input);
  if(typeof input.name!=='string'||!input.name.trim()||input.name.length>200||/[\x00-\x1f/\\]/.test(input.name)||!['application/pdf','image/png','image/jpeg','text/plain','text/csv'].includes(input.mime)||typeof input.content!=='string'||!/^[A-Za-z0-9+/]*={0,2}$/.test(input.content))fail(400,'Upload a PDF, PNG, JPEG, text or CSV file with a valid name.');
- const content=Buffer.from(input.content,'base64');if(!content.length||content.length>2000000)fail(400,'File size must be between 1 byte and 2 MB.');return {name:input.name.trim(),mime:input.mime,content};
+ const content=Buffer.from(input.content,'base64');if(!content.length||content.length>2000000)fail(400,'File size must be between 1 byte and 2 MB.');
+ if(input.mime==='application/pdf'&&(!content.subarray(0,5).equals(Buffer.from('%PDF-'))||!content.subarray(-1024).includes(Buffer.from('%%EOF')))||input.mime==='image/png'&&!content.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10]))||input.mime==='image/jpeg'&&!(content[0]===255&&content[1]===216&&content.at(-2)===255&&content.at(-1)===217))fail(400,'The file content does not match its declared PDF or image type.');return {name:input.name.trim(),mime:input.mime,content};
 }
+async function resolveDocument(db,input,user){if(input?.upload_token!==undefined){if(!/^[a-f0-9]{64}$/.test(input.upload_token))fail(400,'Invalid upload token.');const [[file]]=await db.execute('SELECT * FROM staged_uploads WHERE upload_token=? AND user_id=? AND expires_at>UTC_TIMESTAMP() FOR UPDATE',[input.upload_token,user.id]);if(!file)fail(409,'The staged upload is unavailable or expired. Select the file again.');await db.execute('DELETE FROM staged_uploads WHERE upload_token=?',[input.upload_token]);return {name:file.name,mime:file.mime,content:file.content};}return documentInput(input);}
 function projected(record,user){
  const result=structuredClone(record);
  result.number=`${result.details._portal_inquiry?specs.quote_request.prefix:specs[result.kind].prefix}-${String(result.id).padStart(6,'0')}`;
@@ -19,12 +26,13 @@ function projected(record,user){
  if(result.details.charges)result.totals=documentTotals(record.kind,result.details.charges);
  if(user.role==='customer'){
   if(record.kind==='quote'&&!record.details._published){delete result.details.charges;delete result.totals;}
-  for(const key of ['_converted_id','_invoice_id','_credit_note_id','_revision_id'])delete result.details[key];
-  for(const line of result.details.charges||[])delete line.cost_rate;
+  const publicMetadata=new Set(['_leg_progress','_credits','_net_credits','_tax_credits','_base_credits']);
+  for(const key of Object.keys(result.details))if(key.startsWith('_')&&!publicMetadata.has(key))delete result.details[key];
+  for(const line of result.details.charges||[]){line.currency=line.sell_currency||line.currency||result.details.currency;line.exchange_rate=line.sell_exchange_rate||line.exchange_rate||'1';for(const key of ['cost_rate','cost_currency','cost_exchange_rate','note'])delete line[key];}
   if(result.totals){delete result.totals.cost;delete result.totals.profit;delete result.totals.margin;result.totals.lines.forEach(line=>delete line.cost);}
   for(const key of ['approver_user_id','sales_agent_id','sales_team','vendor_user_id','_published'])delete result.details[key];
  }
- if(user.role==='vendor')delete result.details._bill_ids;
+ if(user.role==='vendor'){for(const key of Object.keys(result.details))if(key.startsWith('_')&&!['_credits','_net_credits','_tax_credits','_invoice_draft'].includes(key))delete result.details[key];for(const key of ['job_exchange_rate','base_exchange_rate','fx_override_reason'])delete result.details[key];}
  return result;
 }
 async function recordById(db,id,user,lock=false){
@@ -33,18 +41,18 @@ async function recordById(db,id,user,lock=false){
  const record=rows[0];if(!record||!Object.hasOwn(specs,record.kind)||!canRead(record,user))fail(404,'Record not found.');return record;
 }
 async function references(db,kind,data,user){
+ await financeReferences({db,kind,data,user,services:serviceFunctions});
  for(const field of specs[kind].fields){const value=data[field.key];if(!value)continue;
   if(field.type.startsWith('user:')){const [rows]=await db.execute('SELECT id FROM users WHERE id=? AND active=TRUE AND role=?',[value,field.type.slice(5)]);if(!rows.length)fail(400,`${field.label} is unavailable.`);}
   else if(field.type.startsWith('ref:')||field.type==='record'){
    const target=await recordById(db,value,user);
    if(field.type.startsWith('ref:')&&target.kind!==field.type.slice(4)&&!(field.key==='source_request_id'&&target.kind==='quote'&&target.details._portal_inquiry&&target.details.source_request_id===target.id))fail(400,`${field.label} has an incorrect record type.`);
-   if(field.key!=='revised_from_id'&&['Archived','Cancelled','Lost'].includes(target.status))fail(400,`${field.label} is inactive.`);
-   if(field.key!=='organization_id'&&data.organization_id&&target.details.organization_id&&target.details.organization_id!==data.organization_id)fail(400,`${field.label} belongs to a different organization.`);
+   if(field.key!=='revised_from_id'&&['Archived','Cancelled','Lost'].includes(target.status)&&!(field.key==='shipment_id'&&target.status==='Cancelled'&&['invoice','vendor_bill','invoice_request'].includes(kind)))fail(400,`${field.label} is inactive.`);
+   if(field.key!=='organization_id'&&!['vendor_bill','purchase_credit'].includes(kind)&&data.organization_id&&target.details.organization_id&&target.details.organization_id!==data.organization_id)fail(400,`${field.label} belongs to a different organization.`);
   }
  }
- if(['invoice','proforma','vendor_bill'].includes(kind))for(const key of ['shipment_id','service_job_id'])if(data[key]){const source=await recordById(db,data[key],user);if(data.currency!==source.details.currency)fail(400,'Document currency must match the linked job.');if(data.client_user_id&&data.client_user_id!==source.details.client_user_id)fail(400,'Client must match the linked job.');}
- if(kind==='invoice_request'){const shipment=await recordById(db,data.shipment_id,user);if(shipment.details.currency!==data.currency)fail(400,'Invoice request currency must match its shipment.');}
- if(kind==='rate_request'&&data.quote_id){const quote=await recordById(db,data.quote_id,user);if(quote.owner_id!==user.id)fail(400,'Rate requests must link to an owned quotation.');if(quote.details.currency!==data.currency)fail(400,'Rate request currency must match the quotation.');}
+ if(['invoice','proforma'].includes(kind))for(const key of ['shipment_id','service_job_id'])if(data[key]){const source=await recordById(db,data[key],user);if(data.client_user_id&&data.client_user_id!==source.details.client_user_id)fail(400,'Client must match the linked job.');}
+ if(kind==='rate_request'&&data.quote_id){const quote=await recordById(db,data.quote_id,user);if(quote.owner_id!==user.id)fail(400,'Rate requests must link to an owned quotation.');}
  if(['rate_request','carrier_booking','invoice_request','vendor_bill'].includes(kind)&&(data.quote_id||data.shipment_id)){
   const parent=await recordById(db,data.quote_id||data.shipment_id,user),leg=parent.details.legs?.find(leg=>leg.id===data.leg_id);
   if(parent.details.multimodal&&!leg)fail(400,'Select a valid leg from the linked journey.');
@@ -54,6 +62,8 @@ async function references(db,kind,data,user){
  }
  if(['invoice','proforma'].includes(kind)&&data.shipment_id){const parent=await recordById(db,data.shipment_id,user);if(parent.details.multimodal&&(data.multimodal!==true||!isDeepStrictEqual(data.legs,parent.details.legs)))fail(400,'Invoice journey must match its shipment.');}
  if(kind==='credit_note'){const invoice=await recordById(db,data.invoice_id,user);if(invoice.details.currency!==data.currency||invoice.details.client_user_id!==data.client_user_id)fail(400,'Credit note currency and client must match the invoice.');if(!['Posted','Partially Paid'].includes(invoice.status))fail(400,'Credit notes require an outstanding posted invoice.');}
+ for(const field of specs[kind].fields.filter(f=>f.type.startsWith('rows:')))for(const row of data[field.key]||[])for(const child of rowSpecs[field.type.slice(5)].filter(f=>f.type.startsWith('ref:')||f.type==='record'))if(row[child.key]){const ref=await recordById(db,row[child.key],user);if(child.type.startsWith('ref:')&&ref.kind!==child.type.slice(4))fail(400,child.label+' has an incorrect record type.');}
+ await operationsReferences({db,kind,data,user,services:serviceFunctions});
 }
 async function insert(db,kind,data,user){
  if(['invoice','proforma'].includes(kind)&&data.shipment_id){const parent=await recordById(db,data.shipment_id,user);if(parent.details.multimodal)data={...data,multimodal:true,legs:parent.details.legs};}
@@ -68,28 +78,38 @@ async function insert(db,kind,data,user){
  const [row]=await db.execute('INSERT INTO business_records(kind,owner_id,details) VALUES(?,?,?)',[kind,user.id,JSON.stringify(data)]);
  await audit(db,user.id,row.insertId,'create');return row.insertId;
 }
-async function audit(db,userId,id,action){await db.execute("INSERT INTO audit_log(user_id,entity,entity_id,action) VALUES(?,'record',?,?)",[userId,id,action]);await db.execute('INSERT INTO workspace_notifications(record_id,user_id,message) SELECT record_id,user_id,? FROM record_followers WHERE record_id=? AND user_id<>?',[action,id,userId]);}
+async function audit(db,userId,id,action){const full=String(action);action=[...full].slice(0,50).join('');if(action!==full)await db.execute("INSERT INTO record_notes(record_id,user_id,message,visibility) VALUES(?,?,?,'internal')",[id,userId,full]);await db.execute("INSERT INTO audit_log(user_id,entity,entity_id,action) VALUES(?,'record',?,?)",[userId,id,action]);await db.execute('INSERT INTO workspace_notifications(record_id,user_id,message) SELECT record_id,user_id,? FROM record_followers WHERE record_id=? AND user_id<>?',[action,id,userId]);}
 async function save(db,record,user,action){
  await db.execute('UPDATE business_records SET status=?,details=?,version=version+1 WHERE id=?',[record.status,JSON.stringify(record.details),record.id]);await audit(db,user.id,record.id,action);record.version++;
 }
-async function ledger(db,record,account,debit=0n,credit=0n){if(!debit&&!credit)return;await db.execute('INSERT INTO ledger_entries(record_id,account,currency,debit,credit) VALUES(?,?,?,?,?)',[record.id,account,record.details.currency,money(debit),money(credit)]);}
+async function ledger(db,record,account,debit=0n,credit=0n,currency=record.details.currency){if(!debit&&!credit)return;if(debit>999999999999999999n||credit>999999999999999999n)fail(400,'Posting exceeds the supported accounting amount.');await db.execute('INSERT INTO ledger_entries(record_id,account,currency,debit,credit) VALUES(?,?,?,?,?)',[record.id,account,currency,money(debit),money(credit)]);}
 async function balance(db,record){const [paid]=await db.execute('SELECT COALESCE(SUM(amount),0) AS amount FROM record_payments WHERE record_id=?',[record.id]);return scaled(documentTotals(record.kind,record.details.charges).total)-scaled(paid[0].amount)-scaled(record.details._credits||'0');}
+const serviceFunctions={fail,cleanError,recordById,insert,save,audit,ledger,balance,documentInput,validateFields,validateRecord,advanceJourney};
 export async function workspaceApi({req,res,url,user,pool,body,json,derive,randomBytes}){
  if(!url.pathname.startsWith('/api/workspace'))return false;
  const tail=url.pathname.slice('/api/workspace'.length);
+ if(req.method==='POST'&&tail==='/uploads'){const file=documentInput(await body(req,3000000)),db=await pool.getConnection();try{await db.beginTransaction();await db.execute('SELECT id FROM users WHERE id=? FOR UPDATE',[user.id]);await db.execute('DELETE FROM staged_uploads WHERE user_id=? AND expires_at<=UTC_TIMESTAMP()',[user.id]);const [[count]]=await db.execute('SELECT COUNT(*) AS n FROM staged_uploads WHERE user_id=?',[user.id]);if(Number(count.n)>=8)fail(429,'Finish the pending uploads before adding more files, or try again after they expire.');const token=randomBytes(32).toString('hex');await db.execute('INSERT INTO staged_uploads(upload_token,user_id,name,mime,content,expires_at) VALUES(?,?,?,?,?,DATE_ADD(UTC_TIMESTAMP(),INTERVAL 1 HOUR))',[token,user.id,file.name,file.mime,file.content]);await db.commit();return json(res,201,{upload_token:token});}catch(e){await db.rollback();throw e;}finally{db.release();}}
+ if(req.method==='GET'&&tail==='/readiness'){if(user.role!=='erp')fail(403,'Admin access is required.');const profile=await issuerProfile(pool,user.id),[[counts]]=await pool.execute("SELECT SUM(active=TRUE AND email LIKE '%@cargoasl.local') AS demoAccounts,SUM(active=TRUE AND role='vendor' AND id NOT IN (SELECT user_id FROM vendor_profiles)) AS missingSupplierProfiles FROM users");return json(res,200,releaseChecks(process.env,profile?.details,{demoAccounts:Number(counts.demoAccounts),missingSupplierProfiles:Number(counts.missingSupplierProfiles)}));}
+ const reportMatch=/^\/reports\/([a-z_]+)$/.exec(tail);
+ if(req.method==='GET'&&reportMatch){if(!Object.hasOwn(reportDefinitions,reportMatch[1]))fail(404,'Report not found.');const [rows]=await pool.execute('SELECT r.*,JSON_UNQUOTE(JSON_EXTRACT(o.details,\'$.name\')) AS organization_name,COALESCE(p.paid_amount,0) AS paid_amount FROM business_records r LEFT JOIN business_records o ON o.id=CAST(JSON_UNQUOTE(JSON_EXTRACT(r.details,\'$.organization_id\')) AS UNSIGNED) LEFT JOIN (SELECT record_id,SUM(amount) AS paid_amount FROM record_payments GROUP BY record_id) p ON p.record_id=r.id WHERE r.owner_id=? OR CAST(JSON_UNQUOTE(JSON_EXTRACT(r.details,\'$.client_user_id\')) AS UNSIGNED)=? OR CAST(JSON_UNQUOTE(JSON_EXTRACT(r.details,\'$.vendor_user_id\')) AS UNSIGNED)=?',[user.id,user.id,user.id]);const records=rows.filter(r=>Object.hasOwn(specs,r.kind)&&canRead(r,user)).map(r=>projected(r,user)),[users]=user.role==='erp'?await pool.execute('SELECT id,name FROM users'): [[]];return json(res,200,{...buildReport(reportMatch[1],records,users,user.role),complete:true,record_count:records.length});}
+ const printable=/^\/records\/(\d+)\/pdf$/.exec(tail);
+ if(req.method==='GET'&&printable){const record=await recordById(pool,Number(printable[1]),user);if(record.details._pdf_document_id&&['Posted','Paid','Partially Paid','Credited','Issued'].includes(record.status)){const [[copy]]=await pool.execute('SELECT content FROM record_documents WHERE id=? AND record_id=?',[record.details._pdf_document_id,record.id]);if(copy){res.writeHead(200,{'Content-Type':'application/pdf','Content-Disposition':'inline; filename="issued-'+record.id+'.pdf"','Cache-Control':'no-store'});res.end(copy.content);return true;}}const job=record.details.shipment_id?await recordById(pool,record.details.shipment_id,user).catch(()=>null):null,profile=await issuerProfile(pool,record.owner_id);const [related]=user.role==='erp'?await pool.execute('SELECT * FROM business_records WHERE owner_id=? AND kind IN (\'organization\',\'shipment\')',[record.owner_id]):await pool.execute('SELECT * FROM business_records WHERE id=?',[record.details.organization_id||0]);const pdf=await renderFreightPdf(user.role==='customer'&&record.kind==='quote'&&!record.details._published?projected(record,user):record,job,profile,related);res.writeHead(200,{'Content-Type':'application/pdf','Content-Disposition':'inline; filename="cargo-asl-'+record.id+'.pdf"','Cache-Control':'no-store'});res.end(pdf);return true;}
+ if(req.method==='GET'&&tail==='/stock'){if(user.role!=='erp')fail(403,'Admin access is required.');const [stock]=await pool.execute('SELECT s.* FROM stock_balances s JOIN business_records w ON w.id=s.warehouse_id WHERE w.owner_id=? ORDER BY warehouse_id,location,sku,lot',[user.id]);return json(res,200,{stock});}
+ if(req.method==='PUT'&&/^\/vendor-profiles\/\d+$/.test(tail)){if(user.role!=='erp')fail(403,'Admin access is required.');const input=await body(req),vendorId=Number(tail.split('/').at(-1));const organization=await recordById(pool,input.organization_id,user);if(organization.kind!=='organization'||!['Vendor','Carrier','Agent'].includes(organization.details.party_type))fail(400,'Select a supplier legal entity.');const [vendors]=await pool.execute("SELECT id FROM users WHERE id=? AND role='vendor'",[vendorId]);if(!vendors.length)fail(400,'Select a vendor account.');await pool.execute('INSERT INTO vendor_profiles(user_id,organization_id) VALUES(?,?) ON DUPLICATE KEY UPDATE organization_id=VALUES(organization_id)',[vendorId,organization.id]);await audit(pool,user.id,organization.id,'vendor legal entity linked to account '+vendorId);return json(res,200,{ok:true});}
  if(req.method==='GET'&&tail==='/snapshot'){
   // Visibility is checked before serializing any record or commercial figures.
   const identity=key=>`CAST(JSON_UNQUOTE(JSON_EXTRACT(r.details,'$.${key}')) AS UNSIGNED)=?`;
   const scope=user.role==='erp'?`(r.owner_id=? OR ${identity('approver_user_id')} OR ${identity('responsible_user_id')} OR ${identity('assigned_user_id')} OR r.kind='master')`:user.role==='vendor'?identity('vendor_user_id'):identity('client_user_id');
-  const [all]=await pool.execute(`SELECT r.*,COALESCE(p.paid_amount,0) AS paid_amount FROM business_records r LEFT JOIN (SELECT record_id,SUM(amount) AS paid_amount FROM record_payments GROUP BY record_id) p ON p.record_id=r.id WHERE ${scope} ORDER BY r.id DESC LIMIT 5001`,user.role==='erp'?[user.id,user.id,user.id,user.id]:[user.id]);
+  const cursor=Number(url.searchParams.get('cursor')||Number.MAX_SAFE_INTEGER),ledgerCursor=Number(url.searchParams.get('ledger_cursor')||Number.MAX_SAFE_INTEGER);if(!Number.isSafeInteger(cursor)||cursor<1||!Number.isSafeInteger(ledgerCursor)||ledgerCursor<1)fail(400,'Invalid pagination cursor.');
+  const [all]=await pool.execute(`SELECT r.*,JSON_UNQUOTE(JSON_EXTRACT(o.details,'$.name')) AS organization_name,COALESCE(p.paid_amount,0) AS paid_amount FROM business_records r LEFT JOIN business_records o ON o.id=CAST(JSON_UNQUOTE(JSON_EXTRACT(r.details,'$.organization_id')) AS UNSIGNED) LEFT JOIN (SELECT record_id,SUM(amount) AS paid_amount FROM record_payments GROUP BY record_id) p ON p.record_id=r.id WHERE (${scope}) AND r.id<? ORDER BY r.id DESC LIMIT 501`,[...(user.role==='erp'?[user.id,user.id,user.id,user.id]:[user.id]),cursor]);
   const records=all.filter(r=>Object.hasOwn(specs,r.kind)&&canRead(r,user)).map(r=>projected(r,user));
-  const users=user.role==='erp'?(await pool.query('SELECT id,name,email,role,active FROM users ORDER BY name'))[0]:[];
-  const ledgerRows=user.role==='erp'?(await pool.execute('SELECT l.* FROM ledger_entries l JOIN business_records r ON r.id=l.record_id WHERE r.owner_id=? ORDER BY l.id DESC LIMIT 5000',[user.id]))[0]:[];
+  const users=user.role==='erp'?(await pool.query('SELECT u.id,u.name,u.email,u.role,u.active,v.organization_id AS supplier_organization_id FROM users u LEFT JOIN vendor_profiles v ON v.user_id=u.id ORDER BY u.name'))[0]:[];
+  const ledgerRows=user.role==='erp'?(await pool.execute('SELECT l.* FROM ledger_entries l JOIN business_records r ON r.id=l.record_id WHERE r.owner_id=? AND l.id<? ORDER BY l.id DESC LIMIT 501',[user.id,ledgerCursor]))[0]:[];
   const [notices]=await pool.execute('SELECT * FROM workspace_notifications WHERE user_id=? ORDER BY id DESC LIMIT 100',[user.id]);
   const validIds=new Set(records.map(r=>r.id));const notifications=notices.filter(n=>validIds.has(n.record_id));
   const mail=user.role==='erp'?(await pool.execute('SELECT id,record_id,recipient,subject,message,status,error,created_at FROM workspace_mail WHERE user_id=? ORDER BY id DESC LIMIT 100',[user.id]))[0]:[];
   let smtpConfigured=false;try{smtpConfigured=user.role==='erp'&&Boolean(smtpSettings());}catch{}
-  return json(res,200,{records:records.slice(0,5000),users,ledger:ledgerRows,notifications,mail,smtpConfigured,limit:5000,truncated:all.length>5000});
+  const visible=new Set(all.slice(0,500).map(r=>r.id));return json(res,200,{records:records.filter(r=>visible.has(r.id)),users,ledger:ledgerRows.slice(0,500),notifications,mail,smtpConfigured,limit:500,next_cursor:all.length>500?all[499].id:null,next_ledger_cursor:ledgerRows.length>500?ledgerRows[499].id:null,truncated:false});
  }
  if(req.method==='POST'&&tail==='/notifications/read'){await pool.execute('UPDATE workspace_notifications SET is_read=TRUE WHERE user_id=?',[user.id]);return json(res,200,{ok:true});}
  const sendMail=/^\/mail\/(\d+)\/send$/.exec(tail);
@@ -129,12 +149,14 @@ export async function workspaceApi({req,res,url,user,pool,body,json,derive,rando
  const id=Number(matched[1]),sub=matched[2];
  if(req.method==='GET'&&id&&!sub){
   const record=await recordById(pool,id,user);const [notes]=await pool.execute(`SELECT n.id,n.message,n.visibility,n.created_at,u.name AS author FROM record_notes n JOIN users u ON u.id=n.user_id WHERE record_id=? ${user.role==='erp'?'':"AND visibility='shared'"} ORDER BY n.id`,[id]);
+  if(record.details.organization_id){const [[org]]=await pool.execute('SELECT details FROM business_records WHERE id=? AND kind=\'organization\'',[record.details.organization_id]);record.organization_name=org?.details.name;}
   const [documents]=await pool.execute(`SELECT id,name,mime,visibility,created_at FROM record_documents WHERE record_id=? ${user.role==='erp'?'':"AND visibility='shared'"} ORDER BY id`,[id]);
   const [history]=user.role==='erp'?await pool.execute("SELECT a.action,a.created_at,u.name AS author FROM audit_log a JOIN users u ON u.id=a.user_id WHERE entity='record' AND entity_id=? ORDER BY a.id",[id]):[[]];
   const [payments]=await pool.execute('SELECT amount,reference,created_at FROM record_payments WHERE record_id=? ORDER BY id',[id]);
   const [followers]=await pool.execute('SELECT f.user_id,u.name FROM record_followers f JOIN users u ON u.id=f.user_id WHERE record_id=?',[id]);
   if(record.kind==='invoice_request'){const [shipments]=await pool.execute('SELECT details FROM business_records WHERE id=? AND kind=?',[record.details.shipment_id,'shipment']);const d=shipments[0]?.details;if(d)record.shipment_summary=Object.fromEntries(['booking_reference','transport_mode','shipment_type','cargo_type','origin','destination','origin_port','destination_port'].map(key=>[key,d[key]||'']));}
-  return json(res,200,{...projected(record,user),notes,documents,history,payments,following:followers.some(f=>f.user_id===user.id),followers:user.role==='erp'?followers:[]});
+  const related=record.kind==='shipment'?(await relatedRecords(pool,record.id,record.owner_id)).filter(r=>canRead(r,user)).map(r=>projected(r,user)):[];
+  return json(res,200,{...projected(record,user),related_records:related,notes,documents,history,payments,following:followers.some(f=>f.user_id===user.id),followers:user.role==='erp'?followers:[]});
  }
  if(req.method==='POST'&&id&&sub==='follow'){
   await recordById(pool,id,user);const input=await body(req);assertInput(input);if(typeof input.following!=='boolean')fail(400,'Following must be true or false.');
@@ -158,12 +180,12 @@ export async function workspaceApi({req,res,url,user,pool,body,json,derive,rando
   const visibility=user.role==='erp'&&input.visibility!=='shared'?'internal':'shared';await pool.execute('INSERT INTO record_documents(record_id,user_id,name,mime,content,visibility) VALUES(?,?,?,?,?,?)',[id,user.id,doc.name,doc.mime,doc.content,visibility]);return json(res,201,{ok:true});
  }
  if(!['POST','PUT'].includes(req.method))fail(405,'Method not supported.');
- const input=await body(req,!id||sub==='action'?10000000:100000);assertInput(input);
+ const input=await body(req,!id||sub==='action'?4000000:100000);assertInput(input);
  const db=await pool.getConnection();
  try{await db.beginTransaction();
   if(!id){
    if(user.role==='customer'&&Object.hasOwn(portalFields,input.kind)){
-    if(input.documents!==undefined&&(!Array.isArray(input.documents)||input.documents.length>3))fail(400,'Attach at most three documents.');const documents=(input.documents||[]).map(documentInput);
+    if(input.documents!==undefined&&(!Array.isArray(input.documents)||input.documents.length>3))fail(400,'Attach at most three documents.');const documents=[];for(const item of input.documents||[])documents.push(await resolveDocument(db,item,user));
     const details=cleanError(()=>{const submitted=validateFields(normalizeJourneyRoute(input.details),portalFields[input.kind]);submitted.title||=input.kind==='courier'?submitted.logistic_id:'Quote inquiry';if(input.kind==='courier')submitted.date||=today();return validateRecord(input.kind,{...submitted,client_user_id:user.id});});
     const [related]=await db.execute("SELECT u.id FROM business_records r JOIN users u ON u.id=r.owner_id AND u.active=TRUE AND u.role='erp' WHERE CAST(JSON_UNQUOTE(JSON_EXTRACT(r.details,'$.client_user_id')) AS UNSIGNED)=? ORDER BY r.id DESC LIMIT 1",[user.id]);
     const [fallback]=related.length?[related]:await db.execute("SELECT id FROM users WHERE role='erp' AND active=TRUE ORDER BY (email=?) DESC,id LIMIT 1",[process.env.INTAKE_ADMIN_EMAIL||process.env.ADMIN_EMAIL||'']);
@@ -174,18 +196,24 @@ export async function workspaceApi({req,res,url,user,pool,body,json,derive,rando
    }
    if(user.role!=='erp')fail(403,'Only an admin can create internal records.');const newId=await insert(db,input.kind,input.details,user);await db.commit();return json(res,201,{id:newId});
   }
+  const hint=await recordById(db,id,user);const parentId=hint.details.shipment_id||hint.details.invoice_id||hint.details.vendor_bill_id||hint.details.quote_id;
+  if(parentId)await db.execute('SELECT id FROM business_records WHERE id=? AND owner_id=? FOR UPDATE',[parentId,hint.owner_id]);
   const record=await recordById(db,id,user,true);
   if(!Number.isSafeInteger(input.version)||record.version!==input.version)fail(409,'This record changed. Reload before saving.');
   if(req.method==='PUT'&&!sub){
    if(!canEdit(record,user)){if(user.role==='erp'&&record.owner_id===user.id)fail(409,'This status is locked for editing.');fail(403,'You cannot edit this record.');}
    const submitted=user.role==='customer'?{...cleanError(()=>validateFields(input.details,portalFields[record.kind])),client_user_id:user.id}:input.details;
    const data=cleanError(()=>validateRecord(record.kind,submitted));if(record.details._portal_inquiry){data._portal_inquiry=true;data.source_request_id=record.id;}
+   if(record.kind==='shipment'&&record.status!=='Draft')for(const key of ['dangerous','temperature','oversized','packages','gross_weight','net_weight','shipper','consignee','shipper_address','consignee_address','currency'])if(!isDeepStrictEqual(data[key],record.details[key]))fail(409,'Booked cargo identity and handling requirements are locked. Create an approved amendment before changing the shipment.');
    if(record.kind==='shipment'&&record.details._leg_progress){if(!data.multimodal||!isDeepStrictEqual(data.legs,record.details.legs))fail(409,'Journey legs are locked after booking.');data._leg_progress=record.details._leg_progress;}
-   await references(db,record.kind,data,user);if(record.details._published)data._published=true;record.details=data;await save(db,record,user,'edit');
+   await references(db,record.kind,data,user);for(const key of Object.keys(record.details))if(key.startsWith('_'))data[key]=record.details[key];record.details=data;await save(db,record,user,'edit');
   }else if(req.method==='POST'&&sub==='action'){
    const action=input.action;if(!actionsFor(record,user).includes(action))fail(403,'This action is not allowed for your role and the current status.');
    if(record.kind==='quote_request'&&action==='prepare')fail(400,'Create a quotation linked to this inquiry to complete preparation.');
    const d=record.details;let next;
+   const context={db,record,input,user,services:serviceFunctions};
+   const operational=await operationsAction(context);const financial=operational.handled?{handled:false}:await financeAction(context);const custom=operational.handled?operational:financial;
+   if(custom.handled){cleanError(()=>validateRecord(record.kind,record.details));record.status=custom.status||record.status;await save(db,record,user,action);await db.commit();return json(res,200,projected(record,user));}
    if(record.kind==='shipment'&&action==='advance_leg'){
     const journey=cleanError(()=>advanceJourney(d.legs,d._leg_progress||{},input.leg_id,input.event,new Date().toISOString()));
     if(['book','depart'].includes(input.event)){const [bookings]=await db.execute("SELECT id FROM business_records WHERE kind='carrier_booking' AND owner_id=? AND status IN ('Confirmed','Completed') AND CAST(JSON_UNQUOTE(JSON_EXTRACT(details,'$.shipment_id')) AS UNSIGNED)=? AND JSON_UNQUOTE(JSON_EXTRACT(details,'$.leg_id'))=? LIMIT 1",[record.owner_id,id,input.leg_id]);if(!bookings.length)fail(409,'Confirm a carrier booking for this journey leg first.');}
@@ -196,8 +224,8 @@ export async function workspaceApi({req,res,url,user,pool,body,json,derive,rando
    if(record.kind==='invoice_request'){
     if(['upload','save_invoice_draft'].includes(action)){
      if(!Array.isArray(input.invoices)||input.invoices.length<1||input.invoices.length>3)fail(400,'Upload between one and three invoices.');
-     const uploaded=input.invoices.map(invoice=>({metadata:cleanError(()=>validateFields(invoice,rowSpecs.requestInvoices)),document:documentInput(invoice.document)}));
-     if(uploaded.some(i=>i.metadata.currency!==d.currency||scaled(i.metadata.total)<=0n||!['application/pdf','image/png','image/jpeg'].includes(i.document.mime)))fail(400,'Invoice totals must be positive, in the request currency, with a PDF or image.');
+     const uploaded=[];for(const invoice of input.invoices)uploaded.push({metadata:cleanError(()=>validateFields(invoice,rowSpecs.requestInvoices)),document:await resolveDocument(db,invoice.document,user)});
+     if(uploaded.some(i=>scaled(i.metadata.total)<=0n||scaled(i.metadata.tax_amount||'0')>scaled(i.metadata.total)||!['application/pdf','image/png','image/jpeg'].includes(i.document.mime)))fail(400,'Invoice totals must be positive and VAT cannot exceed total; attach a PDF or image.');
      const numbers=uploaded.map(i=>i.metadata.bill_number);if(new Set(numbers).size!==numbers.length)fail(400,'Invoice numbers must be unique in this submission.');
      d.submitted_invoices=[];delete d.rejection_reason;
      for(const invoice of uploaded){const doc=invoice.document;const [saved]=await db.execute("INSERT INTO record_documents(record_id,user_id,name,mime,content,visibility) VALUES(?,?,?,?,?,'shared')",[id,user.id,doc.name,doc.mime,doc.content]);d.submitted_invoices.push({...invoice.metadata,document_id:saved.insertId});}
@@ -210,18 +238,11 @@ export async function workspaceApi({req,res,url,user,pool,body,json,derive,rando
     }
     if(action==='reject'){if(typeof input.reason!=='string'||!input.reason.trim()||input.reason.length>2000)fail(400,'A rejection reason is required.');d.rejection_reason=input.reason.trim();await db.execute("INSERT INTO record_notes(record_id,user_id,message,visibility) VALUES(?,?,?,'shared')",[id,user.id,'Invoice rejection: '+d.rejection_reason]);}
     if(['approve','reject'].includes(action)){d.reviewed_by=user.name;d.reviewed_at=new Date().toISOString();}
-    if(action==='approve'){
-     if(!d.submitted_invoices?.length||d._bill_ids?.length)fail(409,'Invoices are missing or this request has already been approved.');d._bill_ids=[];
-     for(const invoice of d.submitted_invoices){
-      const billId=await insert(db,'vendor_bill',{title:invoice.bill_number,organization_id:d.organization_id,vendor_user_id:d.vendor_user_id,shipment_id:d.shipment_id,leg_id:d.leg_id,date:invoice.bill_date,due_date:today(),currency:d.currency,charges:[{description:'Vendor invoice '+invoice.bill_number,quantity:'1',cost_rate:invoice.total,sell_rate:'0',tax_percent:'0',leg_id:d.leg_id}],notes:'Created from '+record.kind+' '+id+'. Review tax allocation and supporting documents before posting.'},user);d._bill_ids.push(billId);
-      const [copied]=await db.execute("INSERT INTO record_documents(record_id,user_id,name,mime,content,visibility) SELECT ?,?,name,mime,content,'shared' FROM record_documents WHERE id=? AND record_id=?",[billId,user.id,invoice.document_id,id]);if(!copied.affectedRows)fail(409,'The supporting invoice document is missing.');
-     }
-    }
    }
    if(['respond','save_rates'].includes(action)){
     const rates=cleanError(()=>validateFields({vendor_charges:input.vendor_charges},[{key:'vendor_charges',label:'Vendor rates',type:'rows:vendorCharges',required:true}]));
     if(rates.vendor_charges.some(r=>Number(r.quantity)<=0))fail(400,'Quantity must be positive.');
-    if(rates.vendor_charges.some(r=>r.currency!==d.currency))fail(400,'Vendor rates must use the request currency.');d.vendor_charges=rates.vendor_charges;
+    d.vendor_charges=rates.vendor_charges;
     if(typeof input.vendor_note!=='string'||input.vendor_note.length>20000)fail(400,'Vendor remarks are invalid.');d.vendor_note=input.vendor_note;
     if(input.validity_date!==undefined){const valid=cleanError(()=>validateFields({validity_date:input.validity_date},[{key:'validity_date',label:'Validity date',type:'date',required:true}]));if(valid.validity_date<today())fail(400,'Validity date cannot be in the past.');d.validity_date=valid.validity_date;}
     if(action==='respond')d.submitted_at=new Date().toISOString();
@@ -250,9 +271,8 @@ export async function workspaceApi({req,res,url,user,pool,body,json,derive,rando
     const [quotes]=await db.execute("SELECT * FROM business_records WHERE id=? AND kind='quote' AND owner_id=? FOR UPDATE",[d.quote_id,record.owner_id]);
     const quote=quotes[0];if(!quote||!['Draft','Renegotiate'].includes(quote.status))fail(409,'The linked quote is unavailable or locked.');
     if(!d.vendor_charges?.length)fail(400,'No vendor rates have been submitted.');
-    if(d.currency!==quote.details.currency)fail(400,'Rate request and quote currencies must match before importing rates.');
     if(quote.details.multimodal){const leg=quote.details.legs?.find(leg=>leg.id===d.leg_id);if(!leg||d.transport_mode!==leg.mode||d.cargo_type!==leg.cargo_type||d.origin!==leg.origin||d.destination!==leg.destination)fail(409,'The rate request route has changed. Request updated rates for this leg.');}
-    const charges=[...(quote.details.charges||[]),...d.vendor_charges.map(r=>({...r,sell_rate:'0',tax_percent:'0',leg_id:d.leg_id}))];
+    const imported=[];for(const r of d.vendor_charges){const fx=await exchangeRate(db,record.owner_id,r.currency,quote.details.currency,quote.details.date);imported.push({...r,note:undefined,cost_currency:r.currency,cost_exchange_rate:fx,sell_currency:quote.details.currency,sell_exchange_rate:'1',exchange_rate:fx,sell_rate:'0',tax_percent:'0',leg_id:d.leg_id});}const charges=[...(quote.details.charges||[]),...imported];
     cleanError(()=>validateRecord('quote',{...quote.details,charges}));quote.details.charges=charges;await save(db,quote,user,'import vendor rates');d._rates_imported=true;
    }
    if(['shipment','service_job'].includes(record.kind)&&action==='invoice'){
@@ -261,31 +281,11 @@ export async function workspaceApi({req,res,url,user,pool,body,json,derive,rando
     d._invoice_id=await insert(db,'invoice',{...d,title:`Invoice for ${d.title}`,[record.kind==='shipment'?'shipment_id':'service_job_id']:id,date:today(),due_date:due.toISOString().slice(0,10)},user);
    }
    if(record.kind==='proforma'&&action==='convert')d._invoice_id=await insert(db,'invoice',d,user);
-   if(['invoice','vendor_bill'].includes(record.kind)&&action==='post'){
-    if(record.kind==='invoice'&&d.shipment_id){const shipment=await recordById(db,d.shipment_id,user);if(shipment.details.multimodal&&!shipment.details.legs.every(leg=>shipment.details._leg_progress?.[leg.id]?.state==='Completed'))fail(409,'Complete every journey leg before posting the final invoice.');}
-    const t=documentTotals(record.kind,d.charges),gross=scaled(t.total),net=scaled(t.revenue),tax=scaled(t.tax);if(!gross)fail(400,'Document total must be positive.');
-    if(record.kind==='invoice'){await ledger(db,record,'Accounts Receivable',gross);await ledger(db,record,'Sales Revenue',0n,net);await ledger(db,record,'Tax Payable',0n,tax);}
-    else{await ledger(db,record,'Operating Expense',net);await ledger(db,record,'Tax Recoverable',tax);await ledger(db,record,'Accounts Payable',0n,gross);}
-   }
-   if(['invoice','vendor_bill'].includes(record.kind)&&action==='pay'){
-    const amount=cleanError(()=>validateFields({amount:input.amount},[{key:'amount',label:'Amount',type:'money',required:true}])).amount;
-    const outstanding=await balance(db,record),paid=scaled(amount);if(paid<=0n||paid>outstanding)fail(400,'Payment must be positive and cannot exceed the outstanding balance.');
-    if(typeof input.reference!=='string'||!input.reference.trim()||input.reference.length>200)fail(400,'A payment reference is required.');
-    await db.execute('INSERT INTO record_payments(record_id,user_id,amount,reference) VALUES(?,?,?,?)',[id,user.id,amount,input.reference.trim()]);
-    if(record.kind==='invoice'){await ledger(db,record,'Cash',paid);await ledger(db,record,'Accounts Receivable',0n,paid);}else{await ledger(db,record,'Accounts Payable',paid);await ledger(db,record,'Cash',0n,paid);}
-    next=paid===outstanding?'Paid':'Partially Paid';
-   }
    if(record.kind==='invoice'&&action==='credit'){
     const amount=cleanError(()=>validateFields({amount:input.amount},[{key:'amount',label:'Amount',type:'money',required:true}])).amount;
     if(scaled(amount)<=0n||scaled(amount)>await balance(db,record))fail(400,'Credit must be positive and cannot exceed the outstanding balance.');
     if(typeof input.reason!=='string'||!input.reason.trim())fail(400,'A reason is required.');
     d._credit_note_id=await insert(db,'credit_note',{title:`Credit for ${d.title}`,organization_id:d.organization_id,invoice_id:id,client_user_id:d.client_user_id,date:today(),currency:d.currency,amount,reason:input.reason},user);next=record.status;
-   }
-   if(record.kind==='credit_note'&&action==='post'){
-    const invoice=await recordById(db,d.invoice_id,user,true);const amount=scaled(d.amount);if(amount<=0n||amount>await balance(db,invoice))fail(400,'Credit exceeds the invoice balance.');
-    const original=totals(invoice.details.charges),gross=scaled(original.total),tax=scaled(original.tax)*amount/gross,net=amount-tax;
-    await ledger(db,record,'Sales Revenue',net);await ledger(db,record,'Tax Payable',tax);await ledger(db,record,'Accounts Receivable',0n,amount);
-    invoice.details._credits=money(scaled(invoice.details._credits||'0')+amount);invoice.details._net_credits=money(scaled(invoice.details._net_credits||'0')+net);if(await balance(db,invoice)===0n)invoice.status='Credited';await save(db,invoice,user,'credit applied');
    }
    record.status=next||workflows[record.kind][record.status][action];
    await save(db,record,user,action==='advance_leg'?`leg ${input.leg_id}: ${input.event}`:action);

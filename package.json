@@ -15,18 +15,27 @@
     "demo:seed": "node scripts/seed-portals.mjs",
     "test:portals": "node scripts/verify-portals.mjs",
     "db:migrate": "node scripts/migrate-workspace.mjs",
-    "test:workflow": "node scripts/verify-workflow.mjs",
-    "test:multimodal": "node scripts/verify-multimodal.mjs",
-    "demo:journeys": "node scripts/verify-multimodal.mjs --demo",
-    "test:browser": "node scripts/verify-browser.mjs",
-    "test:browser:journeys": "node scripts/verify-journey-browser.mjs",
-    "demo:workspace": "node scripts/seed-workspace.mjs"
+    "test:workflow": "node scripts/verify-current-workflow.mjs",
+    "test:multimodal": "node scripts/verify-freight-scenarios.mjs",
+    "demo:journeys": "node scripts/seed-journeys.mjs",
+    "test:browser": "node scripts/verify-freight-browser.mjs",
+    "test:browser:journeys": "node scripts/verify-freight-browser.mjs",
+    "demo:workspace": "node scripts/seed-workspace.mjs",
+    "demo:operations": "node scripts/seed-operations.mjs",
+    "test:controls": "node scripts/verify-freight-controls.mjs",
+    "db:backup": "node scripts/backup-db.mjs",
+    "db:restore": "node scripts/restore-db.mjs",
+    "test:restore": "node scripts/verify-restore.mjs",
+    "db:ledgers": "node scripts/setup-ledgers.mjs",
+    "test:uploads": "node scripts/verify-upload-staging.mjs"
   },
   "dependencies": {
     "mysql2": "^3.24.4",
-    "nodemailer": "^10.0.16"
+    "nodemailer": "^10.3.1",
+    "pdfkit": "^0.20.2"
   },
   "devDependencies": {
+    "@playwright/test": "^1.64.1",
     "jsdom": "^30.1.2"
   }
 }

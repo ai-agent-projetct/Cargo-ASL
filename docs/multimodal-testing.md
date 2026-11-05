@@ -1,3 +1,5 @@
+> Historical baseline results. Current freight workflows and acceptance evidence are documented in [the remediation report](freight-remediation-report.md) and [production runbook](production-readiness.md). The npm test commands now run the remediated suites.
+
 # Multimodal flow verification — 5 November 2026
 
 Both requested Cargo ASL journeys passed from customer inquiry to settled customer invoice and supplier bills. The local app retains two fictional completed examples under its existing demo admin, vendor and client logins. No external cargo booking, banking transaction or source-ERP financial posting was performed.

@@ -27,10 +27,10 @@ test('saved courier records are read-only to clients, including drafts',()=>{
  assert.equal(canEdit({...draft,status:'Booked'},{id:7,role:'customer'}),false);
 });
 
-test('inquiry package dimensions and SGD survive validation without inventing computed totals',()=>{
+test('inquiry dimensions calculate volume and chargeable weight while preserving SGD',()=>{
  const packages=[{type:'Box',count:'2',weight:'20',weight_unit:'kg',length:'100',width:'50',height:'40',dimension_unit:'cm',hs_code:'940320',hazardous:false,description:'Fictional display stand'}];
  const result=validateRecord('quote_request',{...inquiry,cargo_type:'Loose',packages});
- assert.deepEqual(result.packages,packages);assert.equal(result.volume,undefined);
+ assert.deepEqual(result.packages,packages);assert.equal(result.volume,'0.4');assert.equal(result.chargeable_weight,'66.6667');
  for(const change of [{count:'0'},{height:''},{dimension_unit:''},{length:'0'}])assert.throws(()=>validateRecord('quote_request',{...inquiry,packages:[{...packages[0],...change}]}));
  assert.equal(validateRecord('courier',{title:'QA',date:'2026-11-04',client_user_id:7,logistic_id:'QA',goods:[{product:'Box',quantity:'1',currency:'SGD'}]}).goods[0].currency,'SGD');
 });

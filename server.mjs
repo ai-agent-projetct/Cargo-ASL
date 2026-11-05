@@ -6,12 +6,14 @@ import mysql from 'mysql2/promise';
 import { validateQuote, sections } from './quote.mjs';
 import { hostingSettings } from './hosting.mjs';
 import {workspaceApi} from './workspace-api.mjs';
+import {assertProductionEnvironment} from './release-readiness.mjs';
+import {consumeLoginAttempt,clearLoginAttempts} from './login-limiter.mjs';
 
+assertProductionEnvironment(process.env);
 const hosting=hostingSettings();
 const pool = mysql.createPool({ host: process.env.MYSQL_HOST, port: Number(process.env.MYSQL_PORT || 3306), user: process.env.MYSQL_USER, password: process.env.MYSQL_PASSWORD, database: process.env.MYSQL_DATABASE, connectionLimit: 3, maxIdle:1, idleTimeout:10000, connectTimeout:10000, ssl:hosting.ssl, timezone: 'Z' });
 const hash = value => createHash('sha256').update(value).digest('hex');
 const derive = promisify(scrypt);
-const attempts = new Map();
 const portalStyle=['public/portals.css','text/css'];
 const publicFiles = new Map([['/quote-view.mjs',['public/quote-view.mjs','text/javascript']],['/', ['public/index.html','text/html']],['/app.js',['public/app.js','text/javascript']],['/style.css',['public/style.css','text/css']],['/quote.mjs',['quote.mjs','text/javascript']],['/assets/lato.woff',['public/assets/lato.woff','font/woff']],['/assets/lato-bold.woff',['public/assets/lato-bold.woff','font/woff']],['/assets/icons.woff2',['public/assets/icons.woff2','font/woff2']]]);
 function fail(status,message) { throw Object.assign(new Error(message),{status}); }
@@ -46,12 +48,12 @@ const server=http.createServer(async(req,res)=>{
       const [file,type]=publicFiles.get(url.pathname); const data=await readFile(new URL(file,import.meta.url));
       res.writeHead(200,{'Content-Type':type}); return res.end(data);
     }
-    if(req.method==='GET'&&['/workspace.js','/workspace.css','/csv-import.mjs','/business.mjs','/reports.mjs','/targets.mjs'].includes(url.pathname)){
-      const file=['/business.mjs','/reports.mjs','/targets.mjs'].includes(url.pathname)?url.pathname.slice(1):'public'+url.pathname;
+    if(req.method==='GET'&&['/workspace.js','/workspace.css','/csv-import.mjs','/business.mjs','/reports.mjs','/targets.mjs','/money.mjs','/freight-domain.mjs','/freight-ui.mjs'].includes(url.pathname)){
+      const file=['/business.mjs','/reports.mjs','/targets.mjs','/money.mjs','/freight-domain.mjs'].includes(url.pathname)?url.pathname.slice(1):'public'+url.pathname;
       res.writeHead(200,{'Content-Type':url.pathname.endsWith('.css')?'text/css':'text/javascript'});return res.end(await readFile(new URL(file,import.meta.url)));
     }
     if(req.method==='GET'&&url.pathname==='/legacy'){
-      res.writeHead(200,{'Content-Type':'text/html'});return res.end(await readFile(new URL('public/legacy.html',import.meta.url)));
+      res.writeHead(308,{Location:'/'});return res.end();
     }
     if(req.method==='GET' && url.pathname==='/api/health') {
       try { await pool.query('SELECT 1'); return json(res,200,{database:'connected'}); }
@@ -64,12 +66,9 @@ const server=http.createServer(async(req,res)=>{
       if(req.headers['sec-fetch-site']==='cross-site') fail(403,'Cross-site request rejected.');
     }
     if(req.method==='POST' && url.pathname==='/api/login') {
-      const ip=req.socket.remoteAddress; const now=Date.now();
-      for(const [key,value] of attempts) if(now-value.start>600000) attempts.delete(key);
-      const attempt=attempts.get(ip) || {count:0,start:now};
-      if(attempt.count>=10) fail(429,'Too many login attempts. Try again in ten minutes.');
-      attempt.count++; attempts.set(ip,attempt);
       const input=await body(req);
+      const ip=process.env.VERCEL==='1'?String(req.headers['x-forwarded-for']||req.socket.remoteAddress).split(',')[0].trim():req.socket.remoteAddress;
+      await consumeLoginAttempt(pool,ip,input?.email);
       const role={admin:'erp',vendor:'vendor',client:'customer'}[input?.portal];
       if(!role) fail(400,'Choose admin, vendor or client login.');
       if(typeof input.email!=='string'||input.email.length>254||typeof input.password!=='string'||input.password.length>1024) fail(400,'Enter your email and password.');
@@ -78,7 +77,8 @@ const server=http.createServer(async(req,res)=>{
       const calculated=await derive(input.password,salt,64); const expected=Buffer.from(stored,'hex');
       if(!user||expected.length!==calculated.length||!timingSafeEqual(expected,calculated)) fail(401,'Invalid email or password.');
       if(user.role!==role) fail(403,'This account does not have access to the selected portal.');
-      attempts.delete(ip); const token=randomBytes(32).toString('hex');
+      await clearLoginAttempts(pool,user.email); const token=randomBytes(32).toString('hex');
+      await pool.execute('DELETE FROM sessions WHERE expires_at<=UTC_TIMESTAMP()');
       await pool.execute('INSERT INTO sessions(token_hash,user_id,expires_at) VALUES(?,?,DATE_ADD(UTC_TIMESTAMP(),INTERVAL 8 HOUR))',[hash(token),user.id]);
       return json(res,200,{id:user.id,name:user.name,email:user.email,role:user.role},{'Set-Cookie':`cargo_session=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=28800${hosting.secureCookie?'; Secure':''}`});
     }

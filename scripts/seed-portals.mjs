@@ -4,6 +4,7 @@ import {scrypt,randomBytes} from 'node:crypto';
 import {promisify} from 'node:util';
 import mysql from 'mysql2/promise';
 loadEnvFile(new URL('../.env',import.meta.url));
+if(process.env.NODE_ENV==='production')throw Error('Fictional demo seeding is disabled in production.');
 const db=await mysql.createConnection({host:process.env.MYSQL_HOST,port:Number(process.env.MYSQL_PORT),user:process.env.MYSQL_USER,password:process.env.MYSQL_PASSWORD,database:process.env.MYSQL_DATABASE});
 const file=new URL('../.local/portal-accounts.json',import.meta.url);
 await mkdir(new URL('../.local/',import.meta.url),{recursive:true});

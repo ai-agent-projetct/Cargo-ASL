@@ -1,0 +1,2190 @@
+{
+  "date": "2026-11-05T10:39:18.886Z",
+  "release": "Local release candidate; production configuration pending",
+  "unit_tests": {
+    "passed": 121,
+    "failed": 0
+  },
+  "requested_scenarios": {
+    "passed": 24,
+    "failed": 0
+  },
+  "additional_scenarios": [
+    "Road + Sea + Rail"
+  ],
+  "fixtures": 28,
+  "api_checks": 5170,
+  "control_api_checks": 624,
+  "explicit_control_assertions": 71,
+  "upload_api_checks": 25,
+  "browser_groups": 6,
+  "restore_tables": 21,
+  "findings": [
+    {
+      "id": "CASL-AMEND-01",
+      "severity": "High",
+      "status": "FIXED IN TESTED APPLICATION SCOPE",
+      "change": "Versioned future-leg amendments retain departed legs/sequence and old costs. Mid-transit cancellation records disposition; explained settlement remains possible.",
+      "evidence": "S23; cancellation/settlement controls"
+    },
+    {
+      "id": "CASL-AP-01",
+      "severity": "High",
+      "status": "FIXED IN TESTED APPLICATION SCOPE",
+      "change": "Atomic supplier/invoice registry rejects normalized duplicate identity, including concurrent posting.",
+      "evidence": "Concurrent duplicate-bill assertion"
+    },
+    {
+      "id": "CASL-AP-02",
+      "severity": "High",
+      "status": "FIXED IN TESTED APPLICATION SCOPE",
+      "change": "Vendor accounts link to legal supplier organizations; generated bills and AP identify the supplier.",
+      "evidence": "All vendor bill scenarios; AP controls"
+    },
+    {
+      "id": "CASL-CUSTOMS-01",
+      "severity": "High",
+      "status": "FIXED IN TESTED APPLICATION SCOPE",
+      "change": "Declarations, holds, supporting evidence and export/import release gates are enforced.",
+      "evidence": "Cross-border scenarios; missing-proof rejection"
+    },
+    {
+      "id": "CASL-DG-01",
+      "severity": "High",
+      "status": "FIXED IN TESTED APPLICATION SCOPE",
+      "change": "Structured UN/name/class/packing/regulation data, signed support and verified acceptance block unsafe dispatch.",
+      "evidence": "S18 Sea/Air/Road/Rail"
+    },
+    {
+      "id": "CASL-DOC-01",
+      "severity": "High",
+      "status": "FIXED IN TESTED APPLICATION SCOPE",
+      "change": "Mode-specific documents, valid MAWB stock, master/house links, manifests and immutable approved/issued PDF copies.",
+      "evidence": "All scenarios; PDF visual review"
+    },
+    {
+      "id": "CASL-FLEET-01",
+      "severity": "High",
+      "status": "FIXED IN TESTED APPLICATION SCOPE",
+      "change": "Vehicles/drivers/trips validate expiry, capacity and availability; road arrival and trip closure precede completion.",
+      "evidence": "S06 fleet lifecycle"
+    },
+    {
+      "id": "CASL-FX-01",
+      "severity": "High",
+      "status": "FIXED IN TESTED APPLICATION SCOPE",
+      "change": "Independent document currencies, dated FX, AED postings, chosen journals and realized FX gains/losses.",
+      "evidence": "S22; six-currency credit and payment controls"
+    },
+    {
+      "id": "CASL-LOSS-01",
+      "severity": "High",
+      "status": "FIXED IN TESTED APPLICATION SCOPE",
+      "change": "Temperature requirements and instructions survive quotation conversion.",
+      "evidence": "S19; conversion assertion"
+    },
+    {
+      "id": "CASL-OOG-01",
+      "severity": "High",
+      "status": "FIXED IN TESTED APPLICATION SCOPE",
+      "change": "Unit-aware OOG detection requires permits, equipment, engineering/lashing acceptance and evidence.",
+      "evidence": "S20"
+    },
+    {
+      "id": "CASL-PHY-01",
+      "severity": "High",
+      "status": "FIXED IN TESTED APPLICATION SCOPE",
+      "change": "Unit-aware volume, gross weight, 1:6000 air chargeable weight, sea W/M and container TEUs.",
+      "evidence": "Physical assertions in every scenario; unit cases"
+    },
+    {
+      "id": "CASL-SEC-01",
+      "severity": "High",
+      "status": "FIXED IN TESTED APPLICATION SCOPE",
+      "change": "Customer projections and tables omit buy rates, buy FX/currency and supplier-private notes/metadata.",
+      "evidence": "Published-quotation assertions in all scenarios; Chrome client checks"
+    },
+    {
+      "id": "CASL-SPECIAL-21",
+      "severity": "High",
+      "status": "FIXED IN TESTED APPLICATION SCOPE",
+      "change": "Consignments and signed PODs enforce booked, partially delivered and remaining quantities before completion.",
+      "evidence": "S21 60/40 split; incomplete-delivery rejection"
+    },
+    {
+      "id": "CASL-SPECIAL-3",
+      "severity": "High",
+      "status": "FIXED IN TESTED APPLICATION SCOPE",
+      "change": "Sealed masters link multiple houses, master/house B/Ls and manifests; one shared bill allocates exact costs.",
+      "evidence": "S03; shared one-cent allocation unit test"
+    },
+    {
+      "id": "CASL-SPECIAL-7",
+      "severity": "High",
+      "status": "FIXED IN TESTED APPLICATION SCOPE",
+      "change": "Groupage masters carry multiple houses/consignees, shared cost shares and individual delivery evidence.",
+      "evidence": "S07"
+    },
+    {
+      "id": "CASL-TAX-01",
+      "severity": "High",
+      "status": "FIXED IN TESTED APPLICATION SCOPE",
+      "change": "Issuer/customer snapshots, tax treatment, supply date, credits and AED equivalent fields render in legal-profile-aware PDFs. Production legal configuration remains required.",
+      "evidence": "S06/S22; credit controls; rendered PDF review"
+    },
+    {
+      "id": "CASL-TEMP-01",
+      "severity": "High",
+      "status": "FIXED IN TESTED APPLICATION SCOPE",
+      "change": "Setpoint/range/equipment, readings, excursion rejection and explained resolution are linked to each leg.",
+      "evidence": "S19"
+    },
+    {
+      "id": "CASL-VALID-01",
+      "severity": "High",
+      "status": "FIXED IN TESTED APPLICATION SCOPE",
+      "change": "Net weight above gross is rejected; package dimensions/counts and numerical precision are checked.",
+      "evidence": "S24; control negatives; unit tests"
+    },
+    {
+      "id": "CASL-VALID-02",
+      "severity": "High",
+      "status": "FIXED IN TESTED APPLICATION SCOPE",
+      "change": "Planned and actual date pairs reject reversed chronology.",
+      "evidence": "S24; control negatives; unit tests"
+    },
+    {
+      "id": "CASL-WMS-01",
+      "severity": "High",
+      "status": "FIXED IN TESTED APPLICATION SCOPE",
+      "change": "Receipts, bin/cross-warehouse transfers and dispatch use locked non-negative stock balances and cargo quantity limits.",
+      "evidence": "S06 receipt → transfer → dispatch"
+    },
+    {
+      "id": "CASL-GL-01",
+      "severity": "Medium",
+      "status": "FIXED IN TESTED APPLICATION SCOPE",
+      "change": "Payments require an active selected bank/cash journal; AED carrying balances and settlement differences are explicit.",
+      "evidence": "All settlements; changed-FX bank assertion"
+    },
+    {
+      "id": "CASL-LEGACY-01",
+      "severity": "Medium",
+      "status": "FIXED IN TESTED APPLICATION SCOPE",
+      "change": "Legacy entry redirects into the current workspace; historical tables remain preserved.",
+      "evidence": "Route implementation; current browser entry"
+    },
+    {
+      "id": "CASL-RATE-01",
+      "severity": "Medium",
+      "status": "FIXED IN TESTED APPLICATION SCOPE",
+      "change": "Active valid route-matched tariffs apply to charges using physical measurement bases.",
+      "evidence": "1600 kg air tariff control"
+    },
+    {
+      "id": "CASL-ROUND-01",
+      "severity": "Medium",
+      "status": "FIXED IN TESTED APPLICATION SCOPE",
+      "change": "Cumulative source/base net and VAT allocation consumes residual cents on full reversal.",
+      "evidence": "Six-currency API reversals; 250 arbitrary unit sequences"
+    },
+    {
+      "id": "CASL-UI-01",
+      "severity": "Medium",
+      "status": "FIXED IN TESTED APPLICATION SCOPE",
+      "change": "Search updates on input and preserves focus/caret, so the first record click works.",
+      "evidence": "Every browser record open uses search then one click"
+    }
+  ],
+  "scenarios": [
+    {
+      "key": "S01",
+      "name": "Sea FCL export",
+      "status": "PASS",
+      "checks": 125,
+      "test_data": {
+        "route": [
+          {
+            "id": "LEG1",
+            "mode": "Sea Freight",
+            "cargo_type": "Full Container Load",
+            "origin": "Jebel Ali",
+            "destination": "Hamburg",
+            "origin_country": "United Arab Emirates",
+            "destination_country": "Germany",
+            "carrier": "Aster QA Sea Carrier 1",
+            "departure": "2026-11-10",
+            "arrival": "2026-11-12"
+          }
+        ],
+        "shipment_type": "Export",
+        "currency": "USD",
+        "gross_kg": "18000",
+        "dimensions_cm": [
+          "1200",
+          "230",
+          "230"
+        ],
+        "pieces": "1",
+        "cbm": "63.48",
+        "air_chargeable_kg": "18000",
+        "sea_wm": "63.48",
+        "dangerous": false,
+        "temperature": false
+      },
+      "steps": [
+        "Client enquiry",
+        "Vendor rate submission",
+        "Pricing and approval",
+        "Client acceptance",
+        "Conversion under one job",
+        "Carrier confirmation",
+        "Mode documents with master links",
+        "Customs and safety release controls",
+        "Leg dispatch, arrival and delivery",
+        "Supplier invoice upload and settlement",
+        "Customer invoice and settlement",
+        "Profit report and balanced AED ledger"
+      ],
+      "actual": {
+        "job": 3040,
+        "invoice": 3050,
+        "bills": [
+          3049
+        ],
+        "actual_cost": "100.00",
+        "actual_revenue": "170.00",
+        "profit": "70.00",
+        "currency": "USD"
+      }
+    },
+    {
+      "key": "S02",
+      "name": "Sea FCL import",
+      "status": "PASS",
+      "checks": 133,
+      "test_data": {
+        "route": [
+          {
+            "id": "LEG1",
+            "mode": "Sea Freight",
+            "cargo_type": "Full Container Load",
+            "origin": "Hamburg",
+            "destination": "Jebel Ali",
+            "origin_country": "Germany",
+            "destination_country": "United Arab Emirates",
+            "carrier": "Aster QA Sea Carrier 1",
+            "departure": "2026-11-10",
+            "arrival": "2026-11-12"
+          }
+        ],
+        "shipment_type": "Import",
+        "currency": "USD",
+        "gross_kg": "15000",
+        "dimensions_cm": [
+          "600",
+          "230",
+          "230"
+        ],
+        "pieces": "1",
+        "cbm": "31.74",
+        "air_chargeable_kg": "15000",
+        "sea_wm": "31.74",
+        "dangerous": false,
+        "temperature": false
+      },
+      "steps": [
+        "Client enquiry",
+        "Vendor rate submission",
+        "Pricing and approval",
+        "Client acceptance",
+        "Conversion under one job",
+        "Carrier confirmation",
+        "Mode documents with master links",
+        "Customs and safety release controls",
+        "Leg dispatch, arrival and delivery",
+        "Supplier invoice upload and settlement",
+        "Customer invoice and settlement",
+        "Profit report and balanced AED ledger"
+      ],
+      "actual": {
+        "job": 3054,
+        "invoice": 3066,
+        "bills": [
+          3065
+        ],
+        "actual_cost": "100.00",
+        "actual_revenue": "170.00",
+        "profit": "70.00",
+        "currency": "USD"
+      }
+    },
+    {
+      "key": "S03",
+      "name": "Sea LCL consolidation",
+      "status": "PASS",
+      "checks": 274,
+      "test_data": {
+        "route": [
+          {
+            "id": "LEG1",
+            "mode": "Sea Freight",
+            "cargo_type": "Less Container Load",
+            "origin": "Jebel Ali",
+            "destination": "Hamburg",
+            "origin_country": "United Arab Emirates",
+            "destination_country": "Germany",
+            "carrier": "Aster QA Sea Carrier 1",
+            "departure": "2026-11-10",
+            "arrival": "2026-11-12"
+          }
+        ],
+        "shipment_type": "Export",
+        "currency": "USD",
+        "gross_kg": "1000",
+        "dimensions_cm": [
+          "200",
+          "150",
+          "100"
+        ],
+        "pieces": "1",
+        "cbm": "3",
+        "air_chargeable_kg": "1000",
+        "sea_wm": "3",
+        "dangerous": false,
+        "temperature": false
+      },
+      "steps": [
+        "Client enquiry",
+        "Vendor rate submission",
+        "Pricing and approval",
+        "Client acceptance",
+        "Conversion under one job",
+        "Carrier confirmation",
+        "Mode documents with master links",
+        "Customs and safety release controls",
+        "Leg dispatch, arrival and delivery",
+        "Supplier invoice upload and settlement",
+        "Customer invoice and settlement",
+        "Profit report and balanced AED ledger"
+      ],
+      "actual": {
+        "job": 3070,
+        "invoice": 3092,
+        "bills": [
+          3091
+        ],
+        "actual_cost": "160.00",
+        "actual_revenue": "170.00",
+        "profit": "10.00",
+        "currency": "USD",
+        "consolidation": 3080,
+        "second_house": {
+          "job": 3076,
+          "invoice": 3095,
+          "bills": [
+            3094
+          ],
+          "actual_cost": "100.00",
+          "actual_revenue": "170.00",
+          "profit": "70.00",
+          "currency": "USD"
+        },
+        "shared_bill": 3096,
+        "shared_cost_shares": [
+          "60.00",
+          "40.00"
+        ]
+      }
+    },
+    {
+      "key": "S04",
+      "name": "Air export with MAWB and HAWB",
+      "status": "PASS",
+      "checks": 137,
+      "test_data": {
+        "route": [
+          {
+            "id": "LEG1",
+            "mode": "Air Freight",
+            "cargo_type": "Loose",
+            "origin": "Dubai DXB",
+            "destination": "Frankfurt FRA",
+            "origin_country": "United Arab Emirates",
+            "destination_country": "Germany",
+            "carrier": "Aster QA Air Carrier 1",
+            "departure": "2026-11-10",
+            "arrival": "2026-11-12"
+          }
+        ],
+        "shipment_type": "Export",
+        "currency": "USD",
+        "gross_kg": "300",
+        "dimensions_cm": [
+          "240",
+          "200",
+          "200"
+        ],
+        "pieces": "1",
+        "cbm": "9.6",
+        "air_chargeable_kg": "1600",
+        "sea_wm": "9.6",
+        "dangerous": false,
+        "temperature": false
+      },
+      "steps": [
+        "Client enquiry",
+        "Vendor rate submission",
+        "Pricing and approval",
+        "Client acceptance",
+        "Conversion under one job",
+        "Carrier confirmation",
+        "Mode documents with master links",
+        "Customs and safety release controls",
+        "Leg dispatch, arrival and delivery",
+        "Supplier invoice upload and settlement",
+        "Customer invoice and settlement",
+        "Profit report and balanced AED ledger"
+      ],
+      "actual": {
+        "job": 3100,
+        "invoice": 3113,
+        "bills": [
+          3112
+        ],
+        "actual_cost": "100.00",
+        "actual_revenue": "170.00",
+        "profit": "70.00",
+        "currency": "USD"
+      }
+    },
+    {
+      "key": "S05",
+      "name": "Air import",
+      "status": "PASS",
+      "checks": 145,
+      "test_data": {
+        "route": [
+          {
+            "id": "LEG1",
+            "mode": "Air Freight",
+            "cargo_type": "Loose",
+            "origin": "Frankfurt FRA",
+            "destination": "Dubai DXB",
+            "origin_country": "Germany",
+            "destination_country": "United Arab Emirates",
+            "carrier": "Aster QA Air Carrier 1",
+            "departure": "2026-11-10",
+            "arrival": "2026-11-12"
+          }
+        ],
+        "shipment_type": "Import",
+        "currency": "USD",
+        "gross_kg": "300",
+        "dimensions_cm": [
+          "240",
+          "200",
+          "200"
+        ],
+        "pieces": "1",
+        "cbm": "9.6",
+        "air_chargeable_kg": "1600",
+        "sea_wm": "9.6",
+        "dangerous": false,
+        "temperature": false
+      },
+      "steps": [
+        "Client enquiry",
+        "Vendor rate submission",
+        "Pricing and approval",
+        "Client acceptance",
+        "Conversion under one job",
+        "Carrier confirmation",
+        "Mode documents with master links",
+        "Customs and safety release controls",
+        "Leg dispatch, arrival and delivery",
+        "Supplier invoice upload and settlement",
+        "Customer invoice and settlement",
+        "Profit report and balanced AED ledger"
+      ],
+      "actual": {
+        "job": 3117,
+        "invoice": 3132,
+        "bills": [
+          3131
+        ],
+        "actual_cost": "100.00",
+        "actual_revenue": "170.00",
+        "profit": "70.00",
+        "currency": "USD"
+      }
+    },
+    {
+      "key": "S06",
+      "name": "Road FTL domestic",
+      "status": "PASS",
+      "checks": 143,
+      "test_data": {
+        "route": [
+          {
+            "id": "LEG1",
+            "mode": "Road Freight",
+            "cargo_type": "Full Truck Load",
+            "origin": "Dubai",
+            "destination": "Abu Dhabi",
+            "origin_country": "United Arab Emirates",
+            "destination_country": "United Arab Emirates",
+            "carrier": "Aster QA Road Carrier 1",
+            "departure": "2026-11-10",
+            "arrival": "2026-11-12"
+          }
+        ],
+        "shipment_type": "Domestic",
+        "currency": "AED",
+        "gross_kg": "12000",
+        "dimensions_cm": [
+          "1200",
+          "240",
+          "250"
+        ],
+        "pieces": "1",
+        "cbm": "72",
+        "air_chargeable_kg": "12000",
+        "sea_wm": "72",
+        "dangerous": false,
+        "temperature": false
+      },
+      "steps": [
+        "Client enquiry",
+        "Vendor rate submission",
+        "Pricing and approval",
+        "Client acceptance",
+        "Conversion under one job",
+        "Carrier confirmation",
+        "Mode documents with master links",
+        "Customs and safety release controls",
+        "Leg dispatch, arrival and delivery",
+        "Supplier invoice upload and settlement",
+        "Customer invoice and settlement",
+        "Profit report and balanced AED ledger"
+      ],
+      "actual": {
+        "job": 3136,
+        "invoice": 3152,
+        "bills": [
+          3151
+        ],
+        "actual_cost": "100.00",
+        "actual_revenue": "170.00",
+        "profit": "70.00",
+        "currency": "AED"
+      }
+    },
+    {
+      "key": "S07",
+      "name": "Road LTL groupage",
+      "status": "PASS",
+      "checks": 229,
+      "test_data": {
+        "route": [
+          {
+            "id": "LEG1",
+            "mode": "Road Freight",
+            "cargo_type": "Less Truck Load",
+            "origin": "Dubai",
+            "destination": "Abu Dhabi",
+            "origin_country": "United Arab Emirates",
+            "destination_country": "United Arab Emirates",
+            "carrier": "Aster QA Road Carrier 1",
+            "departure": "2026-11-10",
+            "arrival": "2026-11-12"
+          }
+        ],
+        "shipment_type": "Domestic",
+        "currency": "AED",
+        "gross_kg": "800",
+        "dimensions_cm": [
+          "200",
+          "150",
+          "100"
+        ],
+        "pieces": "1",
+        "cbm": "3",
+        "air_chargeable_kg": "800",
+        "sea_wm": "3",
+        "dangerous": false,
+        "temperature": false
+      },
+      "steps": [
+        "Client enquiry",
+        "Vendor rate submission",
+        "Pricing and approval",
+        "Client acceptance",
+        "Conversion under one job",
+        "Carrier confirmation",
+        "Mode documents with master links",
+        "Customs and safety release controls",
+        "Leg dispatch, arrival and delivery",
+        "Supplier invoice upload and settlement",
+        "Customer invoice and settlement",
+        "Profit report and balanced AED ledger"
+      ],
+      "actual": {
+        "job": 3156,
+        "invoice": 3173,
+        "bills": [
+          3172
+        ],
+        "actual_cost": "160.00",
+        "actual_revenue": "170.00",
+        "profit": "10.00",
+        "currency": "AED",
+        "consolidation": 3162,
+        "second_house": {
+          "job": 3160,
+          "invoice": 3176,
+          "bills": [
+            3175
+          ],
+          "actual_cost": "100.00",
+          "actual_revenue": "170.00",
+          "profit": "70.00",
+          "currency": "AED"
+        },
+        "shared_bill": 3177,
+        "shared_cost_shares": [
+          "60.00",
+          "40.00"
+        ]
+      }
+    },
+    {
+      "key": "S08",
+      "name": "Road cross-border UAE to KSA",
+      "status": "PASS",
+      "checks": 125,
+      "test_data": {
+        "route": [
+          {
+            "id": "LEG1",
+            "mode": "Road Freight",
+            "cargo_type": "Full Truck Load",
+            "origin": "Dubai",
+            "destination": "Riyadh",
+            "origin_country": "United Arab Emirates",
+            "destination_country": "Saudi Arabia",
+            "carrier": "Aster QA Road Carrier 1",
+            "departure": "2026-11-10",
+            "arrival": "2026-11-12"
+          }
+        ],
+        "shipment_type": "Export",
+        "currency": "USD",
+        "gross_kg": "1200",
+        "dimensions_cm": [
+          "200",
+          "150",
+          "100"
+        ],
+        "pieces": "1",
+        "cbm": "3",
+        "air_chargeable_kg": "1200",
+        "sea_wm": "3",
+        "dangerous": false,
+        "temperature": false
+      },
+      "steps": [
+        "Client enquiry",
+        "Vendor rate submission",
+        "Pricing and approval",
+        "Client acceptance",
+        "Conversion under one job",
+        "Carrier confirmation",
+        "Mode documents with master links",
+        "Customs and safety release controls",
+        "Leg dispatch, arrival and delivery",
+        "Supplier invoice upload and settlement",
+        "Customer invoice and settlement",
+        "Profit report and balanced AED ledger"
+      ],
+      "actual": {
+        "job": 3181,
+        "invoice": 3191,
+        "bills": [
+          3190
+        ],
+        "actual_cost": "100.00",
+        "actual_revenue": "170.00",
+        "profit": "70.00",
+        "currency": "USD"
+      }
+    },
+    {
+      "key": "S09",
+      "name": "Road + Sea",
+      "status": "PASS",
+      "checks": 185,
+      "test_data": {
+        "route": [
+          {
+            "id": "LEG1",
+            "mode": "Road Freight",
+            "cargo_type": "Full Truck Load",
+            "origin": "Dubai",
+            "destination": "Jebel Ali",
+            "origin_country": "United Arab Emirates",
+            "destination_country": "United Arab Emirates",
+            "carrier": "Aster QA Road Carrier 1",
+            "departure": "2026-11-10",
+            "arrival": "2026-11-12"
+          },
+          {
+            "id": "LEG2",
+            "mode": "Sea Freight",
+            "cargo_type": "Full Container Load",
+            "origin": "Jebel Ali",
+            "destination": "Hamburg",
+            "origin_country": "United Arab Emirates",
+            "destination_country": "Germany",
+            "carrier": "Aster QA Sea Carrier 2",
+            "departure": "2026-11-13",
+            "arrival": "2026-11-15"
+          }
+        ],
+        "shipment_type": "Export",
+        "currency": "USD",
+        "gross_kg": "1200",
+        "dimensions_cm": [
+          "200",
+          "150",
+          "100"
+        ],
+        "pieces": "1",
+        "cbm": "3",
+        "air_chargeable_kg": "1200",
+        "sea_wm": "3",
+        "dangerous": false,
+        "temperature": false
+      },
+      "steps": [
+        "Client enquiry",
+        "Vendor rate submission",
+        "Pricing and approval",
+        "Client acceptance",
+        "Conversion under one job",
+        "Carrier confirmation",
+        "Mode documents with master links",
+        "Customs and safety release controls",
+        "Leg dispatch, arrival and delivery",
+        "Supplier invoice upload and settlement",
+        "Customer invoice and settlement",
+        "Profit report and balanced AED ledger"
+      ],
+      "actual": {
+        "job": 3196,
+        "invoice": 3214,
+        "bills": [
+          3211,
+          3213
+        ],
+        "actual_cost": "250.00",
+        "actual_revenue": "370.00",
+        "profit": "120.00",
+        "currency": "USD"
+      }
+    },
+    {
+      "key": "S10",
+      "name": "Sea + Road",
+      "status": "PASS",
+      "checks": 185,
+      "test_data": {
+        "route": [
+          {
+            "id": "LEG1",
+            "mode": "Sea Freight",
+            "cargo_type": "Full Container Load",
+            "origin": "Hamburg",
+            "destination": "Jebel Ali",
+            "origin_country": "Germany",
+            "destination_country": "United Arab Emirates",
+            "carrier": "Aster QA Sea Carrier 1",
+            "departure": "2026-11-10",
+            "arrival": "2026-11-12"
+          },
+          {
+            "id": "LEG2",
+            "mode": "Road Freight",
+            "cargo_type": "Full Truck Load",
+            "origin": "Jebel Ali",
+            "destination": "Dubai",
+            "origin_country": "United Arab Emirates",
+            "destination_country": "United Arab Emirates",
+            "carrier": "Aster QA Road Carrier 2",
+            "departure": "2026-11-13",
+            "arrival": "2026-11-15"
+          }
+        ],
+        "shipment_type": "Export",
+        "currency": "USD",
+        "gross_kg": "1200",
+        "dimensions_cm": [
+          "200",
+          "150",
+          "100"
+        ],
+        "pieces": "1",
+        "cbm": "3",
+        "air_chargeable_kg": "1200",
+        "sea_wm": "3",
+        "dangerous": false,
+        "temperature": false
+      },
+      "steps": [
+        "Client enquiry",
+        "Vendor rate submission",
+        "Pricing and approval",
+        "Client acceptance",
+        "Conversion under one job",
+        "Carrier confirmation",
+        "Mode documents with master links",
+        "Customs and safety release controls",
+        "Leg dispatch, arrival and delivery",
+        "Supplier invoice upload and settlement",
+        "Customer invoice and settlement",
+        "Profit report and balanced AED ledger"
+      ],
+      "actual": {
+        "job": 3219,
+        "invoice": 3237,
+        "bills": [
+          3234,
+          3236
+        ],
+        "actual_cost": "250.00",
+        "actual_revenue": "370.00",
+        "profit": "120.00",
+        "currency": "USD"
+      }
+    },
+    {
+      "key": "S11",
+      "name": "Road + Air",
+      "status": "PASS",
+      "checks": 197,
+      "test_data": {
+        "route": [
+          {
+            "id": "LEG1",
+            "mode": "Road Freight",
+            "cargo_type": "Full Truck Load",
+            "origin": "Dubai Industrial City",
+            "destination": "Dubai DXB",
+            "origin_country": "United Arab Emirates",
+            "destination_country": "United Arab Emirates",
+            "carrier": "Aster QA Road Carrier 1",
+            "departure": "2026-11-10",
+            "arrival": "2026-11-12"
+          },
+          {
+            "id": "LEG2",
+            "mode": "Air Freight",
+            "cargo_type": "Loose",
+            "origin": "Dubai DXB",
+            "destination": "Frankfurt FRA",
+            "origin_country": "United Arab Emirates",
+            "destination_country": "Germany",
+            "carrier": "Aster QA Air Carrier 2",
+            "departure": "2026-11-13",
+            "arrival": "2026-11-15"
+          }
+        ],
+        "shipment_type": "Export",
+        "currency": "USD",
+        "gross_kg": "1200",
+        "dimensions_cm": [
+          "200",
+          "150",
+          "100"
+        ],
+        "pieces": "1",
+        "cbm": "3",
+        "air_chargeable_kg": "1200",
+        "sea_wm": "3",
+        "dangerous": false,
+        "temperature": false
+      },
+      "steps": [
+        "Client enquiry",
+        "Vendor rate submission",
+        "Pricing and approval",
+        "Client acceptance",
+        "Conversion under one job",
+        "Carrier confirmation",
+        "Mode documents with master links",
+        "Customs and safety release controls",
+        "Leg dispatch, arrival and delivery",
+        "Supplier invoice upload and settlement",
+        "Customer invoice and settlement",
+        "Profit report and balanced AED ledger"
+      ],
+      "actual": {
+        "job": 3242,
+        "invoice": 3263,
+        "bills": [
+          3260,
+          3262
+        ],
+        "actual_cost": "250.00",
+        "actual_revenue": "370.00",
+        "profit": "120.00",
+        "currency": "USD"
+      }
+    },
+    {
+      "key": "S12",
+      "name": "Air + Road",
+      "status": "PASS",
+      "checks": 197,
+      "test_data": {
+        "route": [
+          {
+            "id": "LEG1",
+            "mode": "Air Freight",
+            "cargo_type": "Loose",
+            "origin": "Frankfurt FRA",
+            "destination": "Dubai DXB",
+            "origin_country": "Germany",
+            "destination_country": "United Arab Emirates",
+            "carrier": "Aster QA Air Carrier 1",
+            "departure": "2026-11-10",
+            "arrival": "2026-11-12"
+          },
+          {
+            "id": "LEG2",
+            "mode": "Road Freight",
+            "cargo_type": "Full Truck Load",
+            "origin": "Dubai DXB",
+            "destination": "Abu Dhabi",
+            "origin_country": "United Arab Emirates",
+            "destination_country": "United Arab Emirates",
+            "carrier": "Aster QA Road Carrier 2",
+            "departure": "2026-11-13",
+            "arrival": "2026-11-15"
+          }
+        ],
+        "shipment_type": "Export",
+        "currency": "USD",
+        "gross_kg": "1200",
+        "dimensions_cm": [
+          "200",
+          "150",
+          "100"
+        ],
+        "pieces": "1",
+        "cbm": "3",
+        "air_chargeable_kg": "1200",
+        "sea_wm": "3",
+        "dangerous": false,
+        "temperature": false
+      },
+      "steps": [
+        "Client enquiry",
+        "Vendor rate submission",
+        "Pricing and approval",
+        "Client acceptance",
+        "Conversion under one job",
+        "Carrier confirmation",
+        "Mode documents with master links",
+        "Customs and safety release controls",
+        "Leg dispatch, arrival and delivery",
+        "Supplier invoice upload and settlement",
+        "Customer invoice and settlement",
+        "Profit report and balanced AED ledger"
+      ],
+      "actual": {
+        "job": 3268,
+        "invoice": 3289,
+        "bills": [
+          3286,
+          3288
+        ],
+        "actual_cost": "250.00",
+        "actual_revenue": "370.00",
+        "profit": "120.00",
+        "currency": "USD"
+      }
+    },
+    {
+      "key": "S13",
+      "name": "Sea + Air via Dubai",
+      "status": "PASS",
+      "checks": 217,
+      "test_data": {
+        "route": [
+          {
+            "id": "LEG1",
+            "mode": "Sea Freight",
+            "cargo_type": "Less Container Load",
+            "origin": "Nhava Sheva",
+            "destination": "Dubai Hub",
+            "origin_country": "India",
+            "destination_country": "United Arab Emirates",
+            "carrier": "Aster QA Sea Carrier 1",
+            "departure": "2026-11-10",
+            "arrival": "2026-11-12"
+          },
+          {
+            "id": "LEG2",
+            "mode": "Air Freight",
+            "cargo_type": "Loose",
+            "origin": "Dubai Hub",
+            "destination": "Frankfurt FRA",
+            "origin_country": "United Arab Emirates",
+            "destination_country": "Germany",
+            "carrier": "Aster QA Air Carrier 2",
+            "departure": "2026-11-13",
+            "arrival": "2026-11-15"
+          }
+        ],
+        "shipment_type": "Export",
+        "currency": "USD",
+        "gross_kg": "1200",
+        "dimensions_cm": [
+          "200",
+          "150",
+          "100"
+        ],
+        "pieces": "1",
+        "cbm": "3",
+        "air_chargeable_kg": "1200",
+        "sea_wm": "3",
+        "dangerous": false,
+        "temperature": false
+      },
+      "steps": [
+        "Client enquiry",
+        "Vendor rate submission",
+        "Pricing and approval",
+        "Client acceptance",
+        "Conversion under one job",
+        "Carrier confirmation",
+        "Mode documents with master links",
+        "Customs and safety release controls",
+        "Leg dispatch, arrival and delivery",
+        "Supplier invoice upload and settlement",
+        "Customer invoice and settlement",
+        "Profit report and balanced AED ledger"
+      ],
+      "actual": {
+        "job": 3294,
+        "invoice": 3317,
+        "bills": [
+          3314,
+          3316
+        ],
+        "actual_cost": "250.00",
+        "actual_revenue": "370.00",
+        "profit": "120.00",
+        "currency": "USD"
+      }
+    },
+    {
+      "key": "S14",
+      "name": "Road + Sea + Road door-to-door",
+      "status": "PASS",
+      "checks": 241,
+      "test_data": {
+        "route": [
+          {
+            "id": "LEG1",
+            "mode": "Road Freight",
+            "cargo_type": "Full Truck Load",
+            "origin": "Dubai Industrial City",
+            "destination": "Jebel Ali",
+            "origin_country": "United Arab Emirates",
+            "destination_country": "United Arab Emirates",
+            "carrier": "Aster QA Road Carrier 1",
+            "departure": "2026-11-10",
+            "arrival": "2026-11-12"
+          },
+          {
+            "id": "LEG2",
+            "mode": "Sea Freight",
+            "cargo_type": "Full Container Load",
+            "origin": "Jebel Ali",
+            "destination": "Hamburg",
+            "origin_country": "United Arab Emirates",
+            "destination_country": "Germany",
+            "carrier": "Aster QA Sea Carrier 2",
+            "departure": "2026-11-13",
+            "arrival": "2026-11-15"
+          },
+          {
+            "id": "LEG3",
+            "mode": "Road Freight",
+            "cargo_type": "Full Truck Load",
+            "origin": "Hamburg",
+            "destination": "Berlin",
+            "origin_country": "Germany",
+            "destination_country": "Germany",
+            "carrier": "Aster QA Road Carrier 3",
+            "departure": "2026-11-16",
+            "arrival": "2026-11-18"
+          }
+        ],
+        "shipment_type": "Export",
+        "currency": "USD",
+        "gross_kg": "1200",
+        "dimensions_cm": [
+          "200",
+          "150",
+          "100"
+        ],
+        "pieces": "1",
+        "cbm": "3",
+        "air_chargeable_kg": "1200",
+        "sea_wm": "3",
+        "dangerous": false,
+        "temperature": false
+      },
+      "steps": [
+        "Client enquiry",
+        "Vendor rate submission",
+        "Pricing and approval",
+        "Client acceptance",
+        "Conversion under one job",
+        "Carrier confirmation",
+        "Mode documents with master links",
+        "Customs and safety release controls",
+        "Leg dispatch, arrival and delivery",
+        "Supplier invoice upload and settlement",
+        "Customer invoice and settlement",
+        "Profit report and balanced AED ledger"
+      ],
+      "actual": {
+        "job": 3323,
+        "invoice": 3348,
+        "bills": [
+          3343,
+          3345,
+          3347
+        ],
+        "actual_cost": "450.00",
+        "actual_revenue": "620.00",
+        "profit": "170.00",
+        "currency": "USD"
+      }
+    },
+    {
+      "key": "S15",
+      "name": "Road → Sea → Road → Air under one job",
+      "status": "PASS",
+      "checks": 329,
+      "test_data": {
+        "route": [
+          {
+            "id": "LEG1",
+            "mode": "Road Freight",
+            "cargo_type": "Full Truck Load",
+            "origin": "Dubai",
+            "destination": "Jebel Ali",
+            "origin_country": "United Arab Emirates",
+            "destination_country": "United Arab Emirates",
+            "carrier": "Aster QA Road Carrier 1",
+            "departure": "2026-11-10",
+            "arrival": "2026-11-12"
+          },
+          {
+            "id": "LEG2",
+            "mode": "Sea Freight",
+            "cargo_type": "Full Container Load",
+            "origin": "Jebel Ali",
+            "destination": "Hamburg",
+            "origin_country": "United Arab Emirates",
+            "destination_country": "Germany",
+            "carrier": "Aster QA Sea Carrier 2",
+            "departure": "2026-11-13",
+            "arrival": "2026-11-15"
+          },
+          {
+            "id": "LEG3",
+            "mode": "Road Freight",
+            "cargo_type": "Full Truck Load",
+            "origin": "Hamburg",
+            "destination": "Frankfurt FRA",
+            "origin_country": "Germany",
+            "destination_country": "Germany",
+            "carrier": "Aster QA Road Carrier 3",
+            "departure": "2026-11-16",
+            "arrival": "2026-11-18"
+          },
+          {
+            "id": "LEG4",
+            "mode": "Air Freight",
+            "cargo_type": "Loose",
+            "origin": "Frankfurt FRA",
+            "destination": "London LHR",
+            "origin_country": "Germany",
+            "destination_country": "United Kingdom",
+            "carrier": "Aster QA Air Carrier 4",
+            "departure": "2026-11-19",
+            "arrival": "2026-11-21"
+          }
+        ],
+        "shipment_type": "Export",
+        "currency": "USD",
+        "gross_kg": "1200",
+        "dimensions_cm": [
+          "200",
+          "150",
+          "100"
+        ],
+        "pieces": "1",
+        "cbm": "3",
+        "air_chargeable_kg": "1200",
+        "sea_wm": "3",
+        "dangerous": false,
+        "temperature": false
+      },
+      "steps": [
+        "Client enquiry",
+        "Vendor rate submission",
+        "Pricing and approval",
+        "Client acceptance",
+        "Conversion under one job",
+        "Carrier confirmation",
+        "Mode documents with master links",
+        "Customs and safety release controls",
+        "Leg dispatch, arrival and delivery",
+        "Supplier invoice upload and settlement",
+        "Customer invoice and settlement",
+        "Profit report and balanced AED ledger"
+      ],
+      "actual": {
+        "job": 3355,
+        "invoice": 3392,
+        "bills": [
+          3385,
+          3387,
+          3389,
+          3391
+        ],
+        "actual_cost": "700.00",
+        "actual_revenue": "920.00",
+        "profit": "220.00",
+        "currency": "USD"
+      }
+    },
+    {
+      "key": "S16",
+      "name": "Road → Air → Sea → Road under one job",
+      "status": "PASS",
+      "checks": 329,
+      "test_data": {
+        "route": [
+          {
+            "id": "LEG1",
+            "mode": "Road Freight",
+            "cargo_type": "Full Truck Load",
+            "origin": "Dubai Industrial City",
+            "destination": "Dubai DXB",
+            "origin_country": "United Arab Emirates",
+            "destination_country": "United Arab Emirates",
+            "carrier": "Aster QA Road Carrier 1",
+            "departure": "2026-11-10",
+            "arrival": "2026-11-12"
+          },
+          {
+            "id": "LEG2",
+            "mode": "Air Freight",
+            "cargo_type": "Loose",
+            "origin": "Dubai DXB",
+            "destination": "Hamburg Hub",
+            "origin_country": "United Arab Emirates",
+            "destination_country": "Germany",
+            "carrier": "Aster QA Air Carrier 2",
+            "departure": "2026-11-13",
+            "arrival": "2026-11-15"
+          },
+          {
+            "id": "LEG3",
+            "mode": "Sea Freight",
+            "cargo_type": "Full Container Load",
+            "origin": "Hamburg Hub",
+            "destination": "Rotterdam",
+            "origin_country": "Germany",
+            "destination_country": "Netherlands",
+            "carrier": "Aster QA Sea Carrier 3",
+            "departure": "2026-11-16",
+            "arrival": "2026-11-18"
+          },
+          {
+            "id": "LEG4",
+            "mode": "Road Freight",
+            "cargo_type": "Full Truck Load",
+            "origin": "Rotterdam",
+            "destination": "Amsterdam",
+            "origin_country": "Netherlands",
+            "destination_country": "Netherlands",
+            "carrier": "Aster QA Road Carrier 4",
+            "departure": "2026-11-19",
+            "arrival": "2026-11-21"
+          }
+        ],
+        "shipment_type": "Export",
+        "currency": "USD",
+        "gross_kg": "1200",
+        "dimensions_cm": [
+          "200",
+          "150",
+          "100"
+        ],
+        "pieces": "1",
+        "cbm": "3",
+        "air_chargeable_kg": "1200",
+        "sea_wm": "3",
+        "dangerous": false,
+        "temperature": false
+      },
+      "steps": [
+        "Client enquiry",
+        "Vendor rate submission",
+        "Pricing and approval",
+        "Client acceptance",
+        "Conversion under one job",
+        "Carrier confirmation",
+        "Mode documents with master links",
+        "Customs and safety release controls",
+        "Leg dispatch, arrival and delivery",
+        "Supplier invoice upload and settlement",
+        "Customer invoice and settlement",
+        "Profit report and balanced AED ledger"
+      ],
+      "actual": {
+        "job": 3399,
+        "invoice": 3436,
+        "bills": [
+          3429,
+          3431,
+          3433,
+          3435
+        ],
+        "actual_cost": "700.00",
+        "actual_revenue": "920.00",
+        "profit": "220.00",
+        "currency": "USD"
+      }
+    },
+    {
+      "key": "S17",
+      "name": "Transshipment and carrier change",
+      "status": "PASS",
+      "checks": 261,
+      "test_data": {
+        "route": [
+          {
+            "id": "LEG1",
+            "mode": "Road Freight",
+            "cargo_type": "Full Truck Load",
+            "origin": "Dubai",
+            "destination": "Jebel Ali",
+            "origin_country": "United Arab Emirates",
+            "destination_country": "United Arab Emirates",
+            "carrier": "Aster QA Road Carrier 1",
+            "departure": "2026-11-10",
+            "arrival": "2026-11-12"
+          },
+          {
+            "id": "LEG2",
+            "mode": "Sea Freight",
+            "cargo_type": "Full Container Load",
+            "origin": "Jebel Ali",
+            "destination": "Colombo Hub",
+            "origin_country": "United Arab Emirates",
+            "destination_country": "Sri Lanka",
+            "carrier": "Aster QA Sea Carrier 2",
+            "departure": "2026-11-13",
+            "arrival": "2026-11-15"
+          },
+          {
+            "id": "LEG3",
+            "mode": "Sea Freight",
+            "cargo_type": "Full Container Load",
+            "origin": "Colombo Hub",
+            "destination": "Singapore",
+            "origin_country": "Sri Lanka",
+            "destination_country": "Singapore",
+            "carrier": "Aster QA Sea Carrier 3",
+            "departure": "2026-11-16",
+            "arrival": "2026-11-18"
+          }
+        ],
+        "shipment_type": "Export",
+        "currency": "USD",
+        "gross_kg": "1200",
+        "dimensions_cm": [
+          "200",
+          "150",
+          "100"
+        ],
+        "pieces": "1",
+        "cbm": "3",
+        "air_chargeable_kg": "1200",
+        "sea_wm": "3",
+        "dangerous": false,
+        "temperature": false
+      },
+      "steps": [
+        "Client enquiry",
+        "Vendor rate submission",
+        "Pricing and approval",
+        "Client acceptance",
+        "Conversion under one job",
+        "Carrier confirmation",
+        "Mode documents with master links",
+        "Customs and safety release controls",
+        "Leg dispatch, arrival and delivery",
+        "Supplier invoice upload and settlement",
+        "Customer invoice and settlement",
+        "Profit report and balanced AED ledger"
+      ],
+      "actual": {
+        "job": 3442,
+        "invoice": 3469,
+        "bills": [
+          3464,
+          3466,
+          3468
+        ],
+        "actual_cost": "450.00",
+        "actual_revenue": "620.00",
+        "profit": "170.00",
+        "currency": "USD"
+      }
+    },
+    {
+      "key": "S18-Sea",
+      "name": "Dangerous goods in every mode / Sea Freight",
+      "status": "PASS",
+      "checks": 134,
+      "test_data": {
+        "route": [
+          {
+            "id": "LEG1",
+            "mode": "Sea Freight",
+            "cargo_type": "Less Container Load",
+            "origin": "Dubai DXB",
+            "destination": "Frankfurt FRA",
+            "origin_country": "United Arab Emirates",
+            "destination_country": "Germany",
+            "carrier": "Aster QA Air Carrier 1",
+            "departure": "2026-11-10",
+            "arrival": "2026-11-12"
+          }
+        ],
+        "shipment_type": "Export",
+        "currency": "USD",
+        "gross_kg": "1200",
+        "dimensions_cm": [
+          "200",
+          "150",
+          "100"
+        ],
+        "pieces": "1",
+        "cbm": "3",
+        "air_chargeable_kg": "1200",
+        "sea_wm": "3",
+        "dangerous": true,
+        "temperature": false
+      },
+      "steps": [
+        "Client enquiry",
+        "Vendor rate submission",
+        "Pricing and approval",
+        "Client acceptance",
+        "Conversion under one job",
+        "Carrier confirmation",
+        "Mode documents with master links",
+        "Customs and safety release controls",
+        "Leg dispatch, arrival and delivery",
+        "Supplier invoice upload and settlement",
+        "Customer invoice and settlement",
+        "Profit report and balanced AED ledger"
+      ],
+      "actual": {
+        "job": 3473,
+        "invoice": 3485,
+        "bills": [
+          3484
+        ],
+        "actual_cost": "100.00",
+        "actual_revenue": "170.00",
+        "profit": "70.00",
+        "currency": "USD"
+      }
+    },
+    {
+      "key": "S18-Air",
+      "name": "Dangerous goods in every mode / Air Freight",
+      "status": "PASS",
+      "checks": 146,
+      "test_data": {
+        "route": [
+          {
+            "id": "LEG1",
+            "mode": "Air Freight",
+            "cargo_type": "Loose",
+            "origin": "Dubai DXB",
+            "destination": "Frankfurt FRA",
+            "origin_country": "United Arab Emirates",
+            "destination_country": "Germany",
+            "carrier": "Aster QA Air Carrier 1",
+            "departure": "2026-11-10",
+            "arrival": "2026-11-12"
+          }
+        ],
+        "shipment_type": "Export",
+        "currency": "USD",
+        "gross_kg": "1200",
+        "dimensions_cm": [
+          "200",
+          "150",
+          "100"
+        ],
+        "pieces": "1",
+        "cbm": "3",
+        "air_chargeable_kg": "1200",
+        "sea_wm": "3",
+        "dangerous": true,
+        "temperature": false
+      },
+      "steps": [
+        "Client enquiry",
+        "Vendor rate submission",
+        "Pricing and approval",
+        "Client acceptance",
+        "Conversion under one job",
+        "Carrier confirmation",
+        "Mode documents with master links",
+        "Customs and safety release controls",
+        "Leg dispatch, arrival and delivery",
+        "Supplier invoice upload and settlement",
+        "Customer invoice and settlement",
+        "Profit report and balanced AED ledger"
+      ],
+      "actual": {
+        "job": 3489,
+        "invoice": 3504,
+        "bills": [
+          3503
+        ],
+        "actual_cost": "100.00",
+        "actual_revenue": "170.00",
+        "profit": "70.00",
+        "currency": "USD"
+      }
+    },
+    {
+      "key": "S18-Road",
+      "name": "Dangerous goods in every mode / Road Freight",
+      "status": "PASS",
+      "checks": 134,
+      "test_data": {
+        "route": [
+          {
+            "id": "LEG1",
+            "mode": "Road Freight",
+            "cargo_type": "Full Truck Load",
+            "origin": "Dubai DXB",
+            "destination": "Frankfurt FRA",
+            "origin_country": "United Arab Emirates",
+            "destination_country": "Germany",
+            "carrier": "Aster QA Air Carrier 1",
+            "departure": "2026-11-10",
+            "arrival": "2026-11-12"
+          }
+        ],
+        "shipment_type": "Export",
+        "currency": "USD",
+        "gross_kg": "1200",
+        "dimensions_cm": [
+          "200",
+          "150",
+          "100"
+        ],
+        "pieces": "1",
+        "cbm": "3",
+        "air_chargeable_kg": "1200",
+        "sea_wm": "3",
+        "dangerous": true,
+        "temperature": false
+      },
+      "steps": [
+        "Client enquiry",
+        "Vendor rate submission",
+        "Pricing and approval",
+        "Client acceptance",
+        "Conversion under one job",
+        "Carrier confirmation",
+        "Mode documents with master links",
+        "Customs and safety release controls",
+        "Leg dispatch, arrival and delivery",
+        "Supplier invoice upload and settlement",
+        "Customer invoice and settlement",
+        "Profit report and balanced AED ledger"
+      ],
+      "actual": {
+        "job": 3508,
+        "invoice": 3520,
+        "bills": [
+          3519
+        ],
+        "actual_cost": "100.00",
+        "actual_revenue": "170.00",
+        "profit": "70.00",
+        "currency": "USD"
+      }
+    },
+    {
+      "key": "S18-Rail",
+      "name": "Dangerous goods in every mode / Rail Freight",
+      "status": "PASS",
+      "checks": 134,
+      "test_data": {
+        "route": [
+          {
+            "id": "LEG1",
+            "mode": "Rail Freight",
+            "cargo_type": "Full Container Load",
+            "origin": "Dubai DXB",
+            "destination": "Frankfurt FRA",
+            "origin_country": "United Arab Emirates",
+            "destination_country": "Germany",
+            "carrier": "Aster QA Air Carrier 1",
+            "departure": "2026-11-10",
+            "arrival": "2026-11-12"
+          }
+        ],
+        "shipment_type": "Export",
+        "currency": "USD",
+        "gross_kg": "1200",
+        "dimensions_cm": [
+          "200",
+          "150",
+          "100"
+        ],
+        "pieces": "1",
+        "cbm": "3",
+        "air_chargeable_kg": "1200",
+        "sea_wm": "3",
+        "dangerous": true,
+        "temperature": false
+      },
+      "steps": [
+        "Client enquiry",
+        "Vendor rate submission",
+        "Pricing and approval",
+        "Client acceptance",
+        "Conversion under one job",
+        "Carrier confirmation",
+        "Mode documents with master links",
+        "Customs and safety release controls",
+        "Leg dispatch, arrival and delivery",
+        "Supplier invoice upload and settlement",
+        "Customer invoice and settlement",
+        "Profit report and balanced AED ledger"
+      ],
+      "actual": {
+        "job": 3524,
+        "invoice": 3536,
+        "bills": [
+          3535
+        ],
+        "actual_cost": "100.00",
+        "actual_revenue": "170.00",
+        "profit": "70.00",
+        "currency": "USD"
+      }
+    },
+    {
+      "key": "S19",
+      "name": "Reefer / temperature-controlled cargo",
+      "status": "PASS",
+      "checks": 140,
+      "test_data": {
+        "route": [
+          {
+            "id": "LEG1",
+            "mode": "Sea Freight",
+            "cargo_type": "Full Container Load",
+            "origin": "Jebel Ali",
+            "destination": "Hamburg",
+            "origin_country": "United Arab Emirates",
+            "destination_country": "Germany",
+            "carrier": "Aster QA Sea Carrier 1",
+            "departure": "2026-11-10",
+            "arrival": "2026-11-12"
+          }
+        ],
+        "shipment_type": "Export",
+        "currency": "USD",
+        "gross_kg": "1200",
+        "dimensions_cm": [
+          "200",
+          "150",
+          "100"
+        ],
+        "pieces": "1",
+        "cbm": "3",
+        "air_chargeable_kg": "1200",
+        "sea_wm": "3",
+        "dangerous": false,
+        "temperature": true
+      },
+      "steps": [
+        "Client enquiry",
+        "Vendor rate submission",
+        "Pricing and approval",
+        "Client acceptance",
+        "Conversion under one job",
+        "Carrier confirmation",
+        "Mode documents with master links",
+        "Customs and safety release controls",
+        "Leg dispatch, arrival and delivery",
+        "Supplier invoice upload and settlement",
+        "Customer invoice and settlement",
+        "Profit report and balanced AED ledger"
+      ],
+      "actual": {
+        "job": 3540,
+        "invoice": 3552,
+        "bills": [
+          3551
+        ],
+        "actual_cost": "100.00",
+        "actual_revenue": "170.00",
+        "profit": "70.00",
+        "currency": "USD"
+      }
+    },
+    {
+      "key": "S20",
+      "name": "Oversized out-of-gauge cargo",
+      "status": "PASS",
+      "checks": 199,
+      "test_data": {
+        "route": [
+          {
+            "id": "LEG1",
+            "mode": "Road Freight",
+            "cargo_type": "Full Truck Load",
+            "origin": "Dubai",
+            "destination": "Jebel Ali",
+            "origin_country": "United Arab Emirates",
+            "destination_country": "United Arab Emirates",
+            "carrier": "Aster QA Road Carrier 1",
+            "departure": "2026-11-10",
+            "arrival": "2026-11-12"
+          },
+          {
+            "id": "LEG2",
+            "mode": "Sea Freight",
+            "cargo_type": "Break Bulk",
+            "origin": "Jebel Ali",
+            "destination": "Hamburg",
+            "origin_country": "United Arab Emirates",
+            "destination_country": "Germany",
+            "carrier": "Aster QA Sea Carrier 2",
+            "departure": "2026-11-13",
+            "arrival": "2026-11-15"
+          }
+        ],
+        "shipment_type": "Export",
+        "currency": "USD",
+        "gross_kg": "6500",
+        "dimensions_cm": [
+          "420",
+          "280",
+          "310"
+        ],
+        "pieces": "1",
+        "cbm": "36.456",
+        "air_chargeable_kg": "6500",
+        "sea_wm": "36.456",
+        "dangerous": false,
+        "temperature": false
+      },
+      "steps": [
+        "Client enquiry",
+        "Vendor rate submission",
+        "Pricing and approval",
+        "Client acceptance",
+        "Conversion under one job",
+        "Carrier confirmation",
+        "Mode documents with master links",
+        "Customs and safety release controls",
+        "Leg dispatch, arrival and delivery",
+        "Supplier invoice upload and settlement",
+        "Customer invoice and settlement",
+        "Profit report and balanced AED ledger"
+      ],
+      "actual": {
+        "job": 3557,
+        "invoice": 3577,
+        "bills": [
+          3574,
+          3576
+        ],
+        "actual_cost": "250.00",
+        "actual_revenue": "370.00",
+        "profit": "120.00",
+        "currency": "USD"
+      }
+    },
+    {
+      "key": "S21",
+      "name": "Split shipment with partial deliveries",
+      "status": "PASS",
+      "checks": 127,
+      "test_data": {
+        "route": [
+          {
+            "id": "LEG1",
+            "mode": "Road Freight",
+            "cargo_type": "Full Truck Load",
+            "origin": "Dubai",
+            "destination": "Abu Dhabi",
+            "origin_country": "United Arab Emirates",
+            "destination_country": "United Arab Emirates",
+            "carrier": "Aster QA Road Carrier 1",
+            "departure": "2026-11-10",
+            "arrival": "2026-11-12"
+          }
+        ],
+        "shipment_type": "Domestic",
+        "currency": "AED",
+        "gross_kg": "1200",
+        "dimensions_cm": [
+          "40",
+          "30",
+          "30"
+        ],
+        "pieces": "100",
+        "cbm": "3.6",
+        "air_chargeable_kg": "1200",
+        "sea_wm": "3.6",
+        "dangerous": false,
+        "temperature": false
+      },
+      "steps": [
+        "Client enquiry",
+        "Vendor rate submission",
+        "Pricing and approval",
+        "Client acceptance",
+        "Conversion under one job",
+        "Carrier confirmation",
+        "Mode documents with master links",
+        "Customs and safety release controls",
+        "Leg dispatch, arrival and delivery",
+        "Supplier invoice upload and settlement",
+        "Customer invoice and settlement",
+        "Profit report and balanced AED ledger"
+      ],
+      "actual": {
+        "job": 3581,
+        "invoice": 3592,
+        "bills": [
+          3591
+        ],
+        "actual_cost": "100.00",
+        "actual_revenue": "170.00",
+        "profit": "70.00",
+        "currency": "AED"
+      }
+    },
+    {
+      "key": "S22",
+      "name": "Multi-currency AED / USD / EUR billing",
+      "status": "PASS",
+      "checks": 130,
+      "test_data": {
+        "route": [
+          {
+            "id": "LEG1",
+            "mode": "Sea Freight",
+            "cargo_type": "Full Container Load",
+            "origin": "Jebel Ali",
+            "destination": "Hamburg",
+            "origin_country": "United Arab Emirates",
+            "destination_country": "Germany",
+            "carrier": "Aster QA Sea Carrier 1",
+            "departure": "2026-11-10",
+            "arrival": "2026-11-12"
+          }
+        ],
+        "shipment_type": "Export",
+        "currency": "USD",
+        "gross_kg": "1200",
+        "dimensions_cm": [
+          "200",
+          "150",
+          "100"
+        ],
+        "pieces": "1",
+        "cbm": "3",
+        "air_chargeable_kg": "1200",
+        "sea_wm": "3",
+        "dangerous": false,
+        "temperature": false
+      },
+      "steps": [
+        "Client enquiry",
+        "Vendor rate submission",
+        "Pricing and approval",
+        "Client acceptance",
+        "Conversion under one job",
+        "Carrier confirmation",
+        "Mode documents with master links",
+        "Customs and safety release controls",
+        "Leg dispatch, arrival and delivery",
+        "Supplier invoice upload and settlement",
+        "Customer invoice and settlement",
+        "Profit report and balanced AED ledger"
+      ],
+      "actual": {
+        "job": 3596,
+        "invoice": 3606,
+        "bills": [
+          3605
+        ],
+        "actual_cost": "110.00",
+        "actual_revenue": "170.00",
+        "profit": "60.00",
+        "currency": "USD"
+      }
+    },
+    {
+      "key": "S23",
+      "name": "Booking cancellation and amendment mid-transit",
+      "status": "PASS",
+      "checks": 220,
+      "test_data": {
+        "route": [
+          {
+            "id": "LEG1",
+            "mode": "Road Freight",
+            "cargo_type": "Full Truck Load",
+            "origin": "Dubai",
+            "destination": "Jebel Ali",
+            "origin_country": "United Arab Emirates",
+            "destination_country": "United Arab Emirates",
+            "carrier": "Aster QA Road Carrier 1",
+            "departure": "2026-11-10",
+            "arrival": "2026-11-12"
+          },
+          {
+            "id": "LEG2",
+            "mode": "Sea Freight",
+            "cargo_type": "Full Container Load",
+            "origin": "Jebel Ali",
+            "destination": "Hamburg",
+            "origin_country": "United Arab Emirates",
+            "destination_country": "Germany",
+            "carrier": "Aster QA Sea Carrier 2",
+            "departure": "2026-11-13",
+            "arrival": "2026-11-15"
+          }
+        ],
+        "shipment_type": "Export",
+        "currency": "USD",
+        "gross_kg": "1200",
+        "dimensions_cm": [
+          "200",
+          "150",
+          "100"
+        ],
+        "pieces": "1",
+        "cbm": "3",
+        "air_chargeable_kg": "1200",
+        "sea_wm": "3",
+        "dangerous": false,
+        "temperature": false
+      },
+      "steps": [
+        "Client enquiry",
+        "Vendor rate submission",
+        "Pricing and approval",
+        "Client acceptance",
+        "Conversion under one job",
+        "Carrier confirmation",
+        "Mode documents with master links",
+        "Customs and safety release controls",
+        "Leg dispatch, arrival and delivery",
+        "Supplier invoice upload and settlement",
+        "Customer invoice and settlement",
+        "Profit report and balanced AED ledger"
+      ],
+      "actual": {
+        "job": 3611,
+        "invoice": 3635,
+        "bills": [
+          3632,
+          3634
+        ],
+        "actual_cost": "250.00",
+        "actual_revenue": "370.00",
+        "profit": "120.00",
+        "currency": "USD"
+      }
+    },
+    {
+      "key": "S24",
+      "name": "Missing and wrong data validations",
+      "status": "PASS",
+      "checks": 108,
+      "test_data": {
+        "route": [
+          {
+            "id": "LEG1",
+            "mode": "Road Freight",
+            "cargo_type": "Full Truck Load",
+            "origin": "Dubai",
+            "destination": "Abu Dhabi",
+            "origin_country": "United Arab Emirates",
+            "destination_country": "United Arab Emirates",
+            "carrier": "Aster QA Road Carrier 1",
+            "departure": "2026-11-10",
+            "arrival": "2026-11-12"
+          }
+        ],
+        "shipment_type": "Domestic",
+        "currency": "AED",
+        "gross_kg": "1200",
+        "dimensions_cm": [
+          "200",
+          "150",
+          "100"
+        ],
+        "pieces": "1",
+        "cbm": "3",
+        "air_chargeable_kg": "1200",
+        "sea_wm": "3",
+        "dangerous": false,
+        "temperature": false
+      },
+      "steps": [
+        "Client enquiry",
+        "Vendor rate submission",
+        "Pricing and approval",
+        "Client acceptance",
+        "Conversion under one job",
+        "Carrier confirmation",
+        "Mode documents with master links",
+        "Customs and safety release controls",
+        "Leg dispatch, arrival and delivery",
+        "Supplier invoice upload and settlement",
+        "Customer invoice and settlement",
+        "Profit report and balanced AED ledger"
+      ],
+      "actual": {
+        "job": 3639,
+        "invoice": 3647,
+        "bills": [
+          3646
+        ],
+        "actual_cost": "100.00",
+        "actual_revenue": "170.00",
+        "profit": "70.00",
+        "currency": "AED"
+      }
+    },
+    {
+      "key": "S25",
+      "name": "Additional regression: Road + Sea + Rail",
+      "status": "PASS",
+      "checks": 246,
+      "test_data": {
+        "route": [
+          {
+            "id": "LEG1",
+            "mode": "Road Freight",
+            "cargo_type": "Full Truck Load",
+            "origin": "Dubai",
+            "destination": "Jebel Ali",
+            "origin_country": "United Arab Emirates",
+            "destination_country": "United Arab Emirates",
+            "carrier": "Aster QA Road Carrier 1",
+            "departure": "2026-11-10",
+            "arrival": "2026-11-12"
+          },
+          {
+            "id": "LEG2",
+            "mode": "Sea Freight",
+            "cargo_type": "Full Container Load",
+            "origin": "Jebel Ali",
+            "destination": "Hamburg",
+            "origin_country": "United Arab Emirates",
+            "destination_country": "Germany",
+            "carrier": "Aster QA Sea Carrier 2",
+            "departure": "2026-11-13",
+            "arrival": "2026-11-15"
+          },
+          {
+            "id": "LEG3",
+            "mode": "Rail Freight",
+            "cargo_type": "Full Container Load",
+            "origin": "Hamburg",
+            "destination": "Berlin",
+            "origin_country": "Germany",
+            "destination_country": "Germany",
+            "carrier": "Aster QA Rail Carrier 3",
+            "departure": "2026-11-16",
+            "arrival": "2026-11-18"
+          }
+        ],
+        "shipment_type": "Export",
+        "currency": "USD",
+        "gross_kg": "1200",
+        "dimensions_cm": [
+          "200",
+          "150",
+          "100"
+        ],
+        "pieces": "1",
+        "cbm": "3",
+        "air_chargeable_kg": "1200",
+        "sea_wm": "3",
+        "dangerous": false,
+        "temperature": false
+      },
+      "steps": [
+        "Client enquiry",
+        "Vendor rate submission",
+        "Pricing and approval",
+        "Client acceptance",
+        "Conversion under one job",
+        "Carrier confirmation",
+        "Mode documents with master links",
+        "Customs and safety release controls",
+        "Leg dispatch, arrival and delivery",
+        "Supplier invoice upload and settlement",
+        "Customer invoice and settlement",
+        "Profit report and balanced AED ledger"
+      ],
+      "actual": {
+        "job": 3653,
+        "invoice": 3678,
+        "bills": [
+          3673,
+          3675,
+          3677
+        ],
+        "actual_cost": "450.00",
+        "actual_revenue": "620.00",
+        "profit": "170.00",
+        "currency": "USD"
+      }
+    }
+  ]
+}

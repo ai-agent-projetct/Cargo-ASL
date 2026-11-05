@@ -10,6 +10,13 @@
 !mailer.mjs
 !reports.mjs
 !targets.mjs
+!money.mjs
+!freight-domain.mjs
+!freight-finance.mjs
+!freight-operations.mjs
+!freight-documents.mjs
+!login-limiter.mjs
+!release-readiness.mjs
 !vercel.json
 !public
 !public/**

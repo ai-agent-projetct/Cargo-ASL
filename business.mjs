@@ -1,4 +1,7 @@
 export const masterCategories = ['Incoterms','Carriers','Carrier Agents','HS Codes','UN/LOCODE Locations','Commodities','Custom Locations','Client Tags','Email Templates','Carrier Service Types','Charges','Languages','Container Categories','Container Types','MAWB Stocks','Status Change Reasons','Serial Numbers','Ports','Trucks','Location Types','Warehouses','Countries','States','Country Groups','Cities','Shipment Change Reasons','Service Job Types','Custom BE Types','Vessels','Vessel Categories','Companies','Departments','Groups','Sales Teams','Lead Stages','Opportunity Stages','Lead Sources','Quote Templates','Container Numbers','Document Templates'];
+import {scaled,money,totals,documentTotals} from './money.mjs';
+import {configureFreight,validateFreight} from './freight-domain.mjs';
+export {scaled,money,totals,documentTotals} from './money.mjs';
 const f=(key,label,type='text',required=false)=>({key,label,type,required});
 const shared=[f('title','Title','text',true),f('organization_id','Organization','ref:organization',true)];
 const route=[f('transport_mode','Transport mode','enum:Sea Freight|Air Freight|Road Freight|Rail Freight',true),f('shipment_type','Shipment type','enum:Export|Import|Cross Trade|Domestic|International|Permanent Import/Export|Temporary Import/Export|ATA Carnets',true),f('cargo_type','Cargo type','enum:Full Container Load|Less Container Load|Break Bulk|Bulk|General Cargo',true),f('origin','Origin','text',true),f('destination','Destination','text',true)];
@@ -80,7 +83,7 @@ export function validateFields(input,fields){
    if(type==='month'&&!/^\d{4}-(0[1-9]|1[0-2])$/.test(value))throw new Error(`${label} must be YYYY-MM.`);
    if(type==='email'&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value))throw new Error(`${label} is invalid.`);
    if(type.startsWith('enum:')&&!type.slice(5).split('|').includes(value))throw new Error(`${label} is not an allowed option.`);
-   if(['money','decimal','percent','integer'].includes(type)){const pattern=type==='integer'?/^\d{1,9}$/:type==='money'?/^\d{1,9}(\.\d{1,2})?$/:/^\d{1,9}(\.\d{1,4})?$/;if(!pattern.test(value))throw new Error(`${label} must be a non-negative number with valid precision.`);if(type==='percent'&&Number(value)>100)throw new Error(`${label} cannot exceed 100.`);}
+   if(['money','decimal','percent','integer','fx_rate','temperature'].includes(type)){const pattern=type==='integer'?/^\d{1,9}$/:type==='money'?/^\d{1,9}(\.\d{1,2})?$/:type==='fx_rate'?/^\d{1,9}(\.\d{1,6})?$/:type==='temperature'?/^-?\d{1,3}(\.\d{1,4})?$/:/^\d{1,9}(\.\d{1,4})?$/;if(!pattern.test(value))throw new Error(`${label} must be a non-negative number with valid precision.`);if(type==='percent'&&Number(value)>100)throw new Error(`${label} cannot exceed 100.`);}
   }result[field.key]=value;
  }return result;
 }
@@ -91,10 +94,11 @@ export function normalizeJourneyRoute(input){
 export function validateRecord(kind,input){
  if(!Object.hasOwn(specs,kind))throw new Error('Unknown record type.');
  const data=validateFields(normalizeJourneyRoute(input),specs[kind].fields);
- validateJourney(data);
+ validateJourney(kind==='route_amendment'?{...data,multimodal:true}:data);
  if(kind==='quote'&&data.multimodal&&data.job_type==='Service Job')throw new Error('Multimodal journeys require a shipment quotation.');
  if(['rate_request','carrier_booking','invoice_request','vendor_bill'].includes(kind)&&data.leg_id&&!data.quote_id&&!data.shipment_id)throw new Error('A journey leg requires a linked quotation or shipment.');
- for(const [from,to]of [['date','expiry_date'],['valid_from','valid_to']])if(data[from]&&data[to]&&data[from]>data[to])throw new Error('End date cannot precede start date.');
+ for(const [from,to]of [['date','expiry_date'],['valid_from','valid_to'],['etd','eta'],['atd','ata'],['departure','arrival']])if(data[from]&&data[to]&&data[from]>data[to])throw new Error('End date cannot precede start date.');
+ if(data.gross_weight!==undefined&&data.net_weight!==undefined&&Number(data.net_weight)>Number(data.gross_weight))throw Error('Net weight cannot exceed gross weight.');
  if(data.pickup_at&&data.delivery_at&&data.pickup_at>data.delivery_at)throw new Error('Delivery cannot precede pickup.');
  if(data.transport_mode&&data.cargo_type&&data.cargo_type!=='General Cargo'&&!cargoTypes[data.transport_mode]?.includes(data.cargo_type))throw new Error('Cargo type is not available for this transport mode.');
  for(const row of data.packages||[]){
@@ -112,7 +116,7 @@ export function validateRecord(kind,input){
  }
  for(const row of [...(data.charges||[]),...(data.vendor_charges||[])]){if(Number(row.quantity)<=0)throw new Error('Charge quantity must be positive.');if(row.exchange_rate!==undefined&&Number(row.exchange_rate)<=0)throw new Error('Exchange rate must be positive.');if(row.currency&&row.currency!==data.currency&&!row.exchange_rate)throw new Error('An exchange rate is required for a different line currency.');}
  if(data.charges){const amounts=documentTotals(kind,data.charges);if(['cost','revenue','tax','total'].some(key=>scaled(amounts[key])>999999999999999999n))throw new Error('Document amounts exceed the supported accounting limit.');}
- return data;
+ return validateFreight(kind,data);
 }
 export function validateJourney(data){
  const legs=data.legs||[];
@@ -140,19 +144,6 @@ export function advanceJourney(legs,progress,legId,event,at){
  const status=states.every(s=>s==='Completed')?'Completed':states.every(s=>['Arrived','Completed'].includes(s))?'Arrived':states.some(s=>['In Transit','Arrived','Completed'].includes(s))?'In Transit':states.some(s=>s==='Booked')?'Booked':'Draft';
  return {progress:updated,status};
 }
-export const scaled=(value,places=2)=>{const [whole,decimal='']=String(value||'0').split('.');if(!/^\d+$/.test(whole)||!/^\d*$/.test(decimal)||decimal.length>places)throw new Error('Invalid decimal precision.');return BigInt(whole)*10n**BigInt(places)+BigInt(decimal.padEnd(places,'0')||'0');};
-export const money=value=>`${value/100n}.${String(value%100n).padStart(2,'0')}`;
-const round=(value,divisor)=>(value+divisor/2n)/divisor;
-export function totals(charges=[]){
- let cost=0n,revenue=0n,tax=0n;const lines=charges.map(line=>{
-  const quantity=scaled(line.quantity,4),fx=scaled(line.exchange_rate||'1',4);
-  const lineCost=round(scaled(line.cost_rate||'0')*quantity*fx,100000000n),lineRevenue=round(scaled(line.sell_rate||'0')*quantity*fx,100000000n);
-  const lineTax=round(lineRevenue*scaled(line.tax_percent||'0',4),1000000n);
-  cost+=lineCost;revenue+=lineRevenue;tax+=lineTax;return {cost:money(lineCost),revenue:money(lineRevenue),tax:money(lineTax),total:money(lineRevenue+lineTax)};
- });
- const profit=revenue-cost;return {cost:money(cost),revenue:money(revenue),tax:money(tax),total:money(revenue+tax),profit:profit<0n?'-'+money(-profit):money(profit),margin:revenue?Number(profit*10000n/revenue)/100:0,lines};
-}
-export function documentTotals(kind,charges=[]){return totals(kind==='vendor_bill'?charges.map(line=>({...line,sell_rate:line.cost_rate})):charges);}
 export const workflows={
  prospect:{Draft:{qualify:'Qualified',cancel:'Cancelled'}},
  lead:{Draft:{qualify:'Qualified',lose:'Lost'},Qualified:{convert:'Converted',lose:'Lost'}},
@@ -184,9 +175,11 @@ for(const status of ['Pending Vendor Bill Upload','Vendor Invoice Rejected'])Obj
 for(const status of ['Draft','Active'])Object.assign(workflows.target[status],{generate_months:status,recompute:status});
 export function canRead(record,user){
  if(user.role==='erp')return record.owner_id===user.id||record.details.approver_user_id===user.id||record.details.responsible_user_id===user.id||record.details.assigned_user_id===user.id||record.kind==='master';
- if(user.role==='vendor')return ['rate_request','vendor_bill','invoice_request'].includes(record.kind)&&record.details.vendor_user_id===user.id&&record.status!=='Draft';
+ if(user.role==='vendor')return ['rate_request','vendor_bill','invoice_request','purchase_credit'].includes(record.kind)&&record.details.vendor_user_id===user.id&&record.status!=='Draft';
  if(['quote_request','courier'].includes(record.kind))return record.details.client_user_id===user.id;
  if(['shipment','service_job'].includes(record.kind))return record.details.client_user_id===user.id;
+ if(record.kind==='freight_document')return record.details.client_user_id===user.id&&record.status==='Issued'&&!record.details.consolidation_id&&!['Master B/L','Manifest'].includes(record.details.document_type);
+ if(['consignment','delivery_receipt'].includes(record.kind))return record.details.client_user_id===user.id&&!['Draft','Cancelled'].includes(record.status);
  return ['quote','shipment','service_job','invoice','proforma','credit_note'].includes(record.kind)&&record.details.client_user_id===user.id&&(record.kind==='quote'?record.details._published===true||record.details._portal_inquiry===true:!['Draft','To Approve','Approved','Cancelled'].includes(record.status));
 }
 export function actionsFor(record,user){
@@ -203,9 +196,12 @@ export function actionsFor(record,user){
  if(record.kind==='quote'&&record.status==='Sent')actions=actions.filter(a=>a!=='reject');
  if(record.kind==='quote'&&['Draft','Renegotiate'].includes(record.status))actions=actions.filter(a=>a!=='send'||record.details.approval_required===false);
  if(record.kind==='quote'&&record.details._revision_id)actions=actions.filter(a=>a!=='revise');
- if(record.kind==='shipment')actions=record.details.multimodal?actions.filter(a=>!['book','depart','arrive','complete'].includes(a)):actions.filter(a=>a!=='advance_leg');
+ if(record.kind==='shipment')actions=record.details.multimodal?actions.filter(a=>!['book','depart','arrive','complete'].includes(a)):actions.filter(a=>!['advance_leg','amend'].includes(a));
  if(record.kind==='quote')actions=actions.filter(a=>!['approve','reject'].includes(a)||record.details.approver_user_id===user.id);
  return actions;
 }
-export const editable=record=>['Draft','Active','Renegotiate','Qualified','In Progress','Booked','In Transit','Arrived'].includes(record.status);
+export const editable=record=>record.kind==='consolidation'?record.status==='Draft':record.kind==='customs_entry'?['Draft','Submitted','Held'].includes(record.status):['Draft','Active','Renegotiate','Qualified','In Progress','Booked','In Transit','Arrived'].includes(record.status);
 export const canEdit=(record,user)=>user.role==='erp'&&record.owner_id===user.id&&editable(record);
+
+configureFreight({specs,rowSpecs,workflows,f,shared,route,currencies});
+portalFields.quote_request=specs.quote_request.fields.filter(field=>field.key!=='client_user_id');

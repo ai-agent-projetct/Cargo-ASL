@@ -1,3 +1,5 @@
+> Historical baseline results. Current freight workflows and acceptance evidence are documented in [the remediation report](freight-remediation-report.md) and [production runbook](production-readiness.md). The npm test commands now run the remediated suites.
+
 # Cargo ASL testing
 
 Verified locally on 5 November 2026 using Node 24, MySQL, Chrome 156 and REA 6.5.0. These checks establish implemented behavior, not complete reference-ERP equivalence.
